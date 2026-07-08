@@ -56,10 +56,10 @@ TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 MONGO_URL = os.getenv("MONGO_URL") 
 OWNER_ID = int(os.getenv("OWNER_ID", 0)) 
 OWNER_USERNAME = os.getenv("OWNER_USERNAME", "admin") 
-LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", 0))
+LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "-1003834633374"))
 
 # 🔥 ফাইল স্টোর চ্যানেল (অবশ্যই -100 দিয়ে শুরু হতে হবে)
-DB_CHANNEL_ID = int(os.getenv("DB_CHANNEL_ID", 0)) 
+DB_CHANNEL_ID = int(os.getenv("DB_CHANNEL_ID", "-1004387130022")) 
 # --- WORKER GLOBAL VARIABLE ---
 worker_client = None
 # Check Variables
