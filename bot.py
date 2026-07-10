@@ -182,12 +182,7 @@ async def set_worker_session_db(session_string):
 
 async def start_worker():
     global worker_client
-    try:
-        session = await get_worker_session()
-    except Exception as e:
-        logger.error(f"❌ Could not fetch worker session from DB (bot will continue without worker): {type(e).__name__}: {e}")
-        worker_client = None
-        return
+    session = await get_worker_session()
     if session:
         try:
             worker_client = Client("worker_session", session_string=session, api_id=int(API_ID), api_hash=API_HASH)
