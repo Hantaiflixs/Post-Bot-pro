@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 # 🔥 PYTHON 3.13 ASYNCIO FIX (MAGIC BYPASS) 🔥
-# এই কোডটির কারণে motor ডাটাবেস আর কখনো ক্র্যাশ করবে না
 import asyncio
 if not hasattr(asyncio, 'coroutine'):
     asyncio.coroutine = lambda f: f
@@ -91,7 +90,7 @@ DEFAULT_USER_AD_LINKS =["https://www.google.com", "https://www.bing.com"]
 
 user_conversations = {}
 
-# 🔥 BATCH UPLOAD QUEUE LIMITER (সার্ভার লোড এবং Flood Wait রোধ করতে)
+# 🔥 BATCH UPLOAD QUEUE LIMITER 
 upload_semaphore = asyncio.Semaphore(2)
 
 # ---- DATABASE FUNCTIONS ----
@@ -241,13 +240,12 @@ async def fetch_url(url, method="GET", data=None, headers=None, json_data=None):
             return None
     return None
 
-
 # ---- FLASK KEEP-ALIVE ----
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Ultimate SPA Bot Running (With Background Uploading)"
+    return "🤖 Ultimate SPA Bot Running (With Telegram Direct Forwarding)"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -454,7 +452,7 @@ def apply_badge_to_poster(poster_bytes, text):
         return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 ADVANCED HTML GENERATOR (UPDATED WITH 18+ NSFW BLUR EFFECT)
+# 🔥 ADVANCED HTML GENERATOR (UPDATED FOR TELEGRAM ONLY)
 # ============================================================================
 def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, admin_share_percent=20):
     title = data.get("title") or data.get("name")
@@ -543,38 +541,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         </div>
         '''
 
-    # 🔥 NEW EMBED PLAYER & SERVER SWITCHER LOGIC 🔥
-    embed_links =[]
-    for link in links:
-        if link.get("is_grouped"):
-            if link.get('filemoon_url'):
-                embed_links.append({'name': '🎬 Filemoon HD', 'url': link['filemoon_url']})
-            if link.get('mixdrop_url'):
-                m_url = link['mixdrop_url']
-                if m_url.startswith("//"): m_url = "https:" + m_url
-                embed_links.append({'name': '⚡ MixDrop HD', 'url': m_url})
-
-    embed_html = ""
-    if embed_links:
-        default_embed = embed_links[0]['url']
-        server_btns = ""
-        for i, el in enumerate(embed_links):
-            b64_url = base64.b64encode(el['url'].encode('utf-8')).decode('utf-8')
-            active_class = 'active' if i == 0 else ''
-            server_btns += f'<button class="server-tab {active_class}" onclick="changeServer(\'{b64_url}\', this)">📺 {el["name"]}</button>'
-            
-        embed_html = f'''
-        <div class="section-title">🍿 Watch Online (Live Player)</div>
-        <div class="embed-container">
-            <iframe id="main-embed-player" src="{default_embed}" allowfullscreen="true" frameborder="0"></iframe>
-        </div>
-        <div class="server-switcher">
-            {server_btns}
-        </div>
-        <hr style="border-top: 1px dashed var(--border); margin: 20px 0;">
-        '''
-
-    # 🔥 GENERATE SERVER LIST (GROUPED BY QUALITY/EPISODE) 🔥
+    # 🔥 GENERATE SERVER LIST (ONLY TELEGRAM & CUSTOM LINKS) 🔥
     server_list_html = ""
     grouped_links = {}
     for link in links:
@@ -586,39 +553,14 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     for lbl, grp in grouped_links.items():
         server_list_html += f'<div class="quality-title">📺 {lbl}</div>\n<div class="server-grid">\n'
         for link in grp:
-            if link.get("is_grouped"):
-                if link.get('filemoon_url'):
-                    fm_b64 = base64.b64encode(link['filemoon_url'].encode('utf-8')).decode('utf-8')
-                    server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{fm_b64}\')" style="background: #673AB7;">🎬 Watch on Filemoon</button>'
-                if link.get('mixdrop_url'):
-                    md_b64 = base64.b64encode(link['mixdrop_url'].encode('utf-8')).decode('utf-8')
-                    server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{md_b64}\')" style="background: #FFC107; color: #000;">⚡ MixDrop HD</button>'
-                if link.get('dood_url'):
-                    dood_b64 = base64.b64encode(link['dood_url'].encode('utf-8')).decode('utf-8')
-                    server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{dood_b64}\')" style="background: #F57C00;">🎬 DoodStream</button>'
-                if link.get('stape_url'):
-                    stape_b64 = base64.b64encode(link['stape_url'].encode('utf-8')).decode('utf-8')
-                    server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{stape_b64}\')" style="background: #E91E63;">🎥 Streamtape</button>'
-                if link.get('gofile_url'):
-                    go_b64 = base64.b64encode(link['gofile_url'].encode('utf-8')).decode('utf-8')
-                    server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{go_b64}\')">▶️ GoFile Fast</button>'
-                
+            if link.get("is_grouped") and link.get("tg_url"):
                 tg_b64 = base64.b64encode(link['tg_url'].encode('utf-8')).decode('utf-8')
-                server_list_html += f'<button class="final-server-btn tg-btn" onclick="goToLink(\'{tg_b64}\')">✈️ Telegram Fast</button>'
-                
-                if link.get('fileditch_url'):
-                    fd_b64 = base64.b64encode(link['fileditch_url'].encode('utf-8')).decode('utf-8')
-                    server_list_html += f'<button class="final-server-btn cloud-btn" onclick="goToLink(\'{fd_b64}\')" style="background: #009688;">☁️ Direct Cloud</button>'
-                if link.get('tmpfiles_url'):
-                    tmp_b64 = base64.b64encode(link['tmpfiles_url'].encode('utf-8')).decode('utf-8')
-                    server_list_html += f'<button class="final-server-btn cloud-btn" onclick="goToLink(\'{tmp_b64}\')" style="background: #6A1B9A;">🚀 High-Speed</button>'
-                if link.get('pixel_url'):
-                    px_b64 = base64.b64encode(link['pixel_url'].encode('utf-8')).decode('utf-8')
-                    server_list_html += f'<button class="final-server-btn cloud-btn" onclick="goToLink(\'{px_b64}\')" style="background: #2E7D32;">⚡ Fast Server 2</button>'
+                server_list_html += f'<button class="final-server-btn tg-btn" onclick="goToLink(\'{tg_b64}\')">✈️ Telegram Fast Download</button>'
             else:
                 url_str = link.get('url', '')
-                encoded_url = base64.b64encode(url_str.encode('utf-8')).decode('utf-8')
-                server_list_html += f'<button class="final-server-btn tg-btn" onclick="goToLink(\'{encoded_url}\')">📥 Download Link</button>'
+                if url_str:
+                    encoded_url = base64.b64encode(url_str.encode('utf-8')).decode('utf-8')
+                    server_list_html += f'<button class="final-server-btn tg-btn" onclick="goToLink(\'{encoded_url}\')">📥 Download Link</button>'
         server_list_html += '</div>\n'
 
     # 🔥 REVENUE SHARE LOGIC 🔥
@@ -667,7 +609,6 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         
         .action-grid {{ display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }}
         .main-btn {{ width: 100%; padding: 16px; font-size: 16px; font-weight: bold; text-transform: uppercase; color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: 0.3s; display: flex; justify-content: center; align-items: center; gap: 10px; letter-spacing: 1px; }}
-        .btn-watch {{ background: var(--btn-grad); box-shadow: var(--btn-shadow); }}
         .btn-download {{ background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%); color: #000; box-shadow: 0 4px 15px rgba(0, 201, 255, 0.4); }}
         .main-btn:disabled {{ filter: grayscale(1); cursor: not-allowed; opacity: 0.8; }}
         
@@ -681,18 +622,9 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
 
         .server-list {{ display: flex; flex-direction: column; gap: 12px; margin-top: 15px; }}
         .final-server-btn {{ width: 100%; padding: 14px; font-size: 14px; font-weight: 600; color: #fff; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }}
-        .stream-btn {{ background: var(--primary); }}
         .tg-btn {{ background: #0088cc; }}
-        .cloud-btn {{ background: #4caf50; }}
         .final-server-btn:hover {{ filter: brightness(1.2); transform: scale(1.02); }}
         
-        /* 🔥 EMBED PLAYER STYLES */
-        .embed-container {{ position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; border: 2px solid var(--border); margin-bottom: 15px; background: #000; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }}
-        .embed-container iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }}
-        .server-switcher {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; justify-content: center; }}
-        .server-tab {{ background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border); padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }}
-        .server-tab:hover, .server-tab.active {{ background: var(--primary); color: #fff; border-color: var(--primary); }}
-
         .promo-box {{ margin-top: 25px; text-align: center; }}
         .promo-box img {{ width: 100%; max-width: 300px; border-radius: 20px; border: 1px solid var(--border); }}
 
@@ -732,15 +664,6 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     function goToLink(b64Url) {{
         let realUrl = atob(b64Url);
         window.location.href = realUrl;
-    }}
-    
-    function changeServer(b64Url, btn) {{
-        let realUrl = atob(b64Url);
-        document.getElementById('main-embed-player').src = realUrl;
-        
-        let tabs = document.querySelectorAll('.server-tab');
-        tabs.forEach(t => t.classList.remove('active'));
-        btn.classList.add('active');
     }}
 
     /* 🔞 NSFW Reveal Script */
@@ -796,31 +719,25 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
             {ss_html}
             
             <!-- Download Section -->
-            <div class="section-title">📥 Links & Player</div>
+            <div class="section-title">📥 Access Links</div>
             <div style="background: rgba(0,0,0,0.1); padding: 12px; border-radius: 6px; font-size: 13px; text-align: center; margin-bottom: 15px; color: var(--text-muted); border: 1px solid var(--border);">
-                ℹ️ <b>How to Watch/Download:</b> Click any button below, wait 5 seconds, and the Live Player & Server List will unlock automatically.
+                ℹ️ <b>How to Download:</b> Click the button below, wait 5 seconds, and your Telegram Files will unlock automatically.
             </div>
             
             <div class="action-grid">
-                <button class="main-btn btn-watch" onclick="startUnlock(this, 'watch')">
-                    ▶️ WATCH ONLINE (LIVE PLAYER)
-                </button>
                 <button class="main-btn btn-download" onclick="startUnlock(this, 'download')">
-                    📥 DOWNLOAD FILES & LINKS
+                    📥 GET TELEGRAM FILES
                 </button>
             </div>
             
         </div>
         
-        <!-- Unlocked Links & Player Area -->
+        <!-- Unlocked Links Area -->
         <div id="view-links">
             <div class="success-title">✅ Successfully Unlocked!</div>
             
-            <!-- 🔥 NEW EMBED PLAYER SECTION 🔥 -->
-            {embed_html}
-            
             <div class="section-title">📥 Download Links</div>
-            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 15px;">Please select a high-speed server or episode below to download.</p>
+            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 15px;">Click a button below to get your file instantly on Telegram.</p>
             
             <div class="server-list">
                 {server_list_html}
@@ -1109,24 +1026,18 @@ async def broadcast_msg(client, message):
             
     await msg.edit_text(f"✅ Broadcast Sent to **{count}** users.")
 
-# 🔥 API KEY MANAGER COMMAND
+# 🔥 API KEY MANAGER COMMAND (Not used for upload anymore but kept for compatibility)
 @bot.on_message(filters.command("setapi") & filters.user(OWNER_ID))
 async def set_api_command(client, message):
     try:
         parts = message.text.split(maxsplit=2)
         if len(parts) < 3:
             return await message.reply_text(
-                "⚠️ **Format:** `/setapi <server_name> <api_key>`\n"
-                "**Supported Servers:** `doodstream`, `streamtape`, `filemoon`, `mixdrop`\n"
-                "For Streamtape & MixDrop use format: `email:api_key`"
+                "⚠️ **Format:** `/setapi <server_name> <api_key>`"
             )
         
         server_name = parts[1].lower()
         api_key = parts[2].strip()
-        
-        if server_name not in["doodstream", "streamtape", "filemoon", "mixdrop"]:
-            return await message.reply_text("❌ Unsupported server.")
-            
         await set_server_api(server_name, api_key)
         await message.reply_text(f"✅ **{server_name.title()}** API Key Saved successfully!")
     except Exception as e:
@@ -1342,7 +1253,7 @@ async def on_select(client, cb):
     except Exception as e:
         logger.error(f"Select error: {e}")
 
-# 🔥 BACKGROUND ASYNC UPLOAD (ONLY TELEGRAM)
+# 🔥 BACKGROUND ASYNC UPLOAD (ONLY TELEGRAM - NO DOWNLOAD/UPLOAD TO SERVERS)
 async def process_file_upload(client, message, uid, temp_name):
     convo = user_conversations.get(uid)
     if not convo: return
@@ -1450,12 +1361,12 @@ async def text_handler(client, message):
             if convo.get("post_id"):
                  convo["state"] = "edit_mode"
                  await message.reply_text(
-                    f"✅ **{convo['temp_name']}** ব্যাকগ্রাউন্ডে আপলোড শুরু হয়েছে!\nআপনি চাইলে আপলোড শেষ হওয়ার আগেই আরেকটি ফাইল অ্যাড করতে পারেন।", 
+                    f"✅ **{convo['temp_name']}** আপলোড সারিতে যোগ হয়েছে!\nআপনি চাইলে আপলোড শেষ হওয়ার আগেই আরেকটি ফাইল অ্যাড করতে পারেন।", 
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
             else:
                 convo["state"] = "ask_links"
                 await message.reply_text(
-                    f"✅ **{convo['temp_name']}** ব্যাকগ্রাউন্ডে আপলোড শুরু হয়েছে!\nআপনি চাইলে আপলোড শেষ হওয়ার আগেই আরেকটি ফাইল অ্যাড করতে পারেন।", 
+                    f"✅ **{convo['temp_name']}** আপলোড সারিতে যোগ হয়েছে!\nআপনি চাইলে আপলোড শেষ হওয়ার আগেই আরেকটি ফাইল অ্যাড করতে পারেন।", 
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
 
         elif text.startswith("http"):
@@ -1570,7 +1481,6 @@ async def set_lname_cb(client, cb):
 async def gen_edit_finish(client, cb):
     uid = int(cb.data.split("_")[-1])
     if uid in user_conversations:
-        # Check if uploads are still processing
         if user_conversations[uid].get("pending_uploads", 0) > 0:
             return await cb.answer("⏳ ফাইল আপলোড শেষ হওয়া পর্যন্ত অপেক্ষা করুন...", show_alert=True)
             
@@ -1595,7 +1505,6 @@ async def safety_cb(client, cb):
         
     user_conversations[uid]["details"]["force_adult"] = True if action == "safe_no" else False
     
-    # Ask for Theme before Generating Post
     btns = [[InlineKeyboardButton("🔴 Netflix (Dark)", callback_data=f"theme_netflix_{uid}")],[InlineKeyboardButton("🔵 Prime (Blue)", callback_data=f"theme_prime_{uid}")],[InlineKeyboardButton("⚪ Anime (Light)", callback_data=f"theme_light_{uid}")]
     ]
     await cb.message.edit_text("🎨 **ওয়েবসাইটের থিম (Theme) সিলেক্ট করুন:**", reply_markup=InlineKeyboardMarkup(btns))
@@ -1668,7 +1577,6 @@ async def get_code(client, cb):
 
 # --- PLUGIN LOADER FUNCTION ---
 async def load_plugins():
-    """plugins ফোল্ডার থেকে অটোমেটিক সব মডিউল লোড করবে"""
     plugins_path = os.path.join(os.path.dirname(__file__), "plugins")
     
     if not os.path.exists(plugins_path):
