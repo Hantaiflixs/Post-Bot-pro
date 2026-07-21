@@ -172,6 +172,7 @@ async def save_user_ads(user_id, links):
 
 async def get_all_users_count():
     return await users_col.count_documents({})
+
 # --- WORKER DB & INIT FUNCTIONS ---
 async def get_worker_session():
     data = await settings_col.find_one({"_id": "worker_config"})
@@ -191,6 +192,7 @@ async def start_worker():
         except Exception as e:
             logger.error(f"❌ Worker Error: {e}")
             worker_client = None
+
 # 🔥 DYNAMIC API KEY MANAGER
 async def get_server_api(server_name):
     data = await settings_col.find_one({"_id": "api_keys"})
@@ -239,163 +241,6 @@ async def fetch_url(url, method="GET", data=None, headers=None, json_data=None):
             return None
     return None
 
-# ====================================================================
-# 🔥 AUTO MIRROR UPLOAD FUNCTIONS (8 ADVANCED MULTI-SERVERS)
-# ====================================================================
-
-async def upload_to_gofile(file_path):
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.gofile.io/servers") as resp:
-                data = await resp.json()
-                server = data['data']['servers'][0]['name']
-            
-            url = f"https://{server}.gofile.io/contents/uploadfile"
-            with open(file_path, 'rb') as f:
-                form = aiohttp.FormData()
-                form.add_field('file', f, filename=os.path.basename(file_path))
-                async with session.post(url, data=form) as upload_resp:
-                    result = await upload_resp.json()
-                    if result['status'] == 'ok':
-                        return result['data']['downloadPage']
-    except Exception as e:
-        logger.error(f"GoFile Error: {e}")
-    return None
-
-async def upload_to_fileditch(file_path):
-    try:
-        url = "https://up1.fileditch.com/upload.php"
-        async with aiohttp.ClientSession() as session:
-            with open(file_path, 'rb') as f:
-                form = aiohttp.FormData()
-                form.add_field('files[]', f, filename=os.path.basename(file_path))
-                async with session.post(url, data=form) as resp:
-                    result = await resp.json()
-                    return result['files'][0]['url']
-    except Exception as e:
-        logger.error(f"FileDitch Error: {e}")
-    return None
-
-async def upload_to_tmpfiles(file_path):
-    try:
-        url = "https://tmpfiles.org/api/v1/upload"
-        async with aiohttp.ClientSession() as session:
-            with open(file_path, 'rb') as f:
-                form = aiohttp.FormData()
-                form.add_field('file', f, filename=os.path.basename(file_path))
-                async with session.post(url, data=form) as resp:
-                    result = await resp.json()
-                    if result.get('status') == 'success':
-                        return result['data']['url'].replace("api/v1/download/", "")
-    except Exception as e:
-        logger.error(f"TmpFiles Error: {e}")
-    return None
-
-async def upload_to_pixeldrain(file_path):
-    try:
-        url = "https://pixeldrain.com/api/file"
-        async with aiohttp.ClientSession() as session:
-            with open(file_path, 'rb') as f:
-                form = aiohttp.FormData()
-                form.add_field('file', f, filename=os.path.basename(file_path))
-                async with session.post(url, data=form) as resp:
-                    result = await resp.json()
-                    if result.get('success'):
-                        return f"https://pixeldrain.com/u/{result['id']}"
-    except Exception as e:
-        logger.error(f"PixelDrain Error: {e}")
-    return None
-
-async def upload_to_doodstream(file_path):
-    api_key = await get_server_api("doodstream")
-    if not api_key:
-        return None
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"https://doodapi.com/api/upload/server?key={api_key}") as resp:
-                data = await resp.json()
-                if data.get('msg') != 'OK':
-                    return None
-                upload_url = data['result']
-            
-            with open(file_path, 'rb') as f:
-                form = aiohttp.FormData()
-                form.add_field('file', f, filename=os.path.basename(file_path))
-                form.add_field('api_key', api_key)
-                async with session.post(upload_url, data=form) as upload_resp:
-                    result = await upload_resp.json()
-                    if result.get('msg') == 'OK':
-                        return result['result'][0]['protected_embed']
-    except Exception as e:
-        logger.error(f"DoodStream Error: {e}")
-    return None
-
-async def upload_to_streamtape(file_path):
-    api_credentials = await get_server_api("streamtape")
-    if not api_credentials:
-        return None 
-    try:
-        login_id, api_key = api_credentials.split(":")
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"https://api.streamtape.com/file/ul?login={login_id}&key={api_key}") as resp:
-                data = await resp.json()
-                upload_url = data['result']['url']
-            
-            with open(file_path, 'rb') as f:
-                form = aiohttp.FormData()
-                form.add_field('file', f, filename=os.path.basename(file_path))
-                async with session.post(upload_url, data=form) as upload_resp:
-                    result = await upload_resp.json()
-                    if result.get('status') == 200:
-                        return result['result']['url']
-    except Exception as e:
-        logger.error(f"Streamtape Error: {e}")
-    return None
-
-async def upload_to_filemoon(file_path):
-    api_key = await get_server_api("filemoon")
-    if not api_key:
-        return None
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"https://filemoonapi.com/api/upload/server?key={api_key}") as resp:
-                data = await resp.json()
-                if data.get('msg') != 'OK':
-                    return None
-                upload_url = data['result']
-            
-            with open(file_path, 'rb') as f:
-                form = aiohttp.FormData()
-                form.add_field('file', f, filename=os.path.basename(file_path))
-                form.add_field('api_key', api_key)
-                async with session.post(upload_url, data=form) as upload_resp:
-                    result = await upload_resp.json()
-                    if result.get('msg') == 'OK':
-                        return f"https://filemoon.sx/e/{result['result'][0]['filecode']}"
-    except Exception as e:
-        logger.error(f"Filemoon Error: {e}")
-    return None
-
-async def upload_to_mixdrop(file_path):
-    api_credentials = await get_server_api("mixdrop")
-    if not api_credentials or ":" not in api_credentials:
-        return None 
-    try:
-        email, api_key = api_credentials.split(":")
-        url = "https://api.mixdrop.co/upload"
-        async with aiohttp.ClientSession() as session:
-            with open(file_path, 'rb') as f:
-                form = aiohttp.FormData()
-                form.add_field('file', f, filename=os.path.basename(file_path))
-                form.add_field('email', email)
-                form.add_field('key', api_key)
-                async with session.post(url, data=form) as resp:
-                    result = await resp.json()
-                    if result.get('success'):
-                        return result['result']['embedurl']
-    except Exception as e:
-        logger.error(f"MixDrop Error: {e}")
-    return None
 
 # ---- FLASK KEEP-ALIVE ----
 app = Flask(__name__)
@@ -984,7 +829,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         
         <!-- Promotional Content -->
         <div class="promo-box">
-            <a href="https://t.me/+6hvCoblt6CxhZjhl" target="_blank"><img src="{BTN_TELEGRAM}"></a>
+            <a href="https://t.me/koreandrama006" target="_blank"><img src="{BTN_TELEGRAM}"></a>
         </div>
     </div>
     {script_html}
@@ -1286,6 +1131,7 @@ async def set_api_command(client, message):
         await message.reply_text(f"✅ **{server_name.title()}** API Key Saved successfully!")
     except Exception as e:
         await message.reply_text(f"❌ Error: {e}")
+
 # --- WORKER COMMANDS ---
 @bot.on_message(filters.command("setworker") & filters.user(OWNER_ID))
 async def set_worker_cmd(client, message):
@@ -1312,6 +1158,7 @@ async def worker_info(client, message):
         await message.reply_text(f"🤖 **Worker Status:** Active\n👤 **Name:** {me.first_name}\n🆔 **ID:** `{me.id}`")
     else:
         await message.reply_text("❌ Worker Session কানেক্টেড নেই।")
+
 # --- USER COMMANDS ---
 @bot.on_message(filters.command("stats") & filters.user(OWNER_ID))
 async def bot_stats(client, message):
@@ -1495,28 +1342,7 @@ async def on_select(client, cb):
     except Exception as e:
         logger.error(f"Select error: {e}")
 
-async def down_progress(current, total, status_msg, start_time, last_update_time):
-    now = time.time()
-    if now - last_update_time[0] >= 3.0 or current == total:
-        last_update_time[0] = now
-        percent = (current / total) * 100 if total > 0 else 0
-        speed = current / (now - start_time) if (now - start_time) > 0 else 1
-        eta = (total - current) / speed if speed > 0 else 0
-        
-        def hbytes(size):
-            for unit in['B', 'KB', 'MB', 'GB']:
-                if size < 1024.0: return f"{size:.2f} {unit}"
-                size /= 1024.0
-            return f"{size:.2f} TB"
-            
-        filled = int(percent / 10)
-        bar = "█" * filled + "░" * (10 - filled)
-        try:
-            await status_msg.edit_text(f"⏳ **২/৩: বট সার্ভারে ডাউনলোড হচ্ছে...**\n\n📊 {bar} {percent:.1f}%\n💾 {hbytes(current)} / {hbytes(total)}\n🚀 স্পিড: {hbytes(speed)}/s | ⏱️ সময় বাকি: {int(eta)}s")
-        except:
-            pass
-
-# 🔥 BACKGROUND ASYNC UPLOAD (ALLOWS MULTIPLE AT ONCE)
+# 🔥 BACKGROUND ASYNC UPLOAD (ONLY TELEGRAM)
 async def process_file_upload(client, message, uid, temp_name):
     convo = user_conversations.get(uid)
     if not convo: return
@@ -1524,47 +1350,17 @@ async def process_file_upload(client, message, uid, temp_name):
     convo["pending_uploads"] = convo.get("pending_uploads", 0) + 1
     status_msg = await message.reply_text(f"🕒 **সারির অপেক্ষায়...**\n({temp_name})", quote=True)
     
-    # ওয়ার্কার চেক: ওয়ার্কার থাকলে সেটা দিয়ে ডাউনলোড হবে, নাহলে মেইন বোট দিয়ে
-    uploader = worker_client if (worker_client and worker_client.is_connected) else client
-    
     try:
         async with upload_semaphore:
-            await status_msg.edit_text(f"⏳ **১/৩: ডাটাবেসে সেভ হচ্ছে...**\n(By: {'Worker' if uploader == worker_client else 'Bot'})")
+            await status_msg.edit_text(f"⏳ **টেলিগ্রাম ডাটাবেসে সেভ হচ্ছে...**")
+            
             copied_msg = await message.copy(chat_id=DB_CHANNEL_ID)
             bot_username = (await client.get_me()).username
             tg_link = f"https://t.me/{bot_username}?start=get-{copied_msg.id}"
             
-            start_time = time.time()
-            last_update_time =[start_time]
-            
-            # মিডিয়া ডাউনলোড (ওয়ার্কার বা বোট ব্যবহার করে)
-            file_path = await uploader.download_media(
-                message, 
-                progress=down_progress, 
-                progress_args=(status_msg, start_time, last_update_time)
-            )
-
-            await status_msg.edit_text(f"⏳ **৩/৩: মাল্টি-সার্ভারে আপলোড হচ্ছে...**")
-            
-            # প্যারালাল আপলোড
-            results = await asyncio.gather(
-                upload_to_gofile(file_path), upload_to_fileditch(file_path), upload_to_tmpfiles(file_path),
-                upload_to_pixeldrain(file_path), upload_to_doodstream(file_path), upload_to_streamtape(file_path),
-                upload_to_filemoon(file_path), upload_to_mixdrop(file_path), return_exceptions=True
-            )
-
-            if os.path.exists(file_path): os.remove(file_path)
-            
             convo["links"].append({
-                "label": temp_name, "tg_url": tg_link, 
-                "gofile_url": results[0] if not isinstance(results[0], Exception) else None,
-                "fileditch_url": results[1] if not isinstance(results[1], Exception) else None,
-                "tmpfiles_url": results[2] if not isinstance(results[2], Exception) else None,
-                "pixel_url": results[3] if not isinstance(results[3], Exception) else None,
-                "dood_url": results[4] if not isinstance(results[4], Exception) else None,
-                "stape_url": results[5] if not isinstance(results[5], Exception) else None,
-                "filemoon_url": results[6] if not isinstance(results[6], Exception) else None,
-                "mixdrop_url": results[7] if not isinstance(results[7], Exception) else None,
+                "label": temp_name, 
+                "tg_url": tg_link, 
                 "is_grouped": True
             })
             await status_msg.edit_text(f"✅ **আপলোড সম্পন্ন:** {temp_name}")
@@ -1649,7 +1445,6 @@ async def text_handler(client, message):
         
     elif state == "wait_link_url":
         if message.video or message.document:
-            # We use the async background task so we don't have to wait!
             asyncio.create_task(process_file_upload(client, message, uid, convo["temp_name"]))
 
             if convo.get("post_id"):
@@ -1874,22 +1669,16 @@ async def get_code(client, cb):
 # --- PLUGIN LOADER FUNCTION ---
 async def load_plugins():
     """plugins ফোল্ডার থেকে অটোমেটিক সব মডিউল লোড করবে"""
-    # কারেন্ট ডিরেক্টরিতে plugins নামে ফোল্ডার খুঁজবে
     plugins_path = os.path.join(os.path.dirname(__file__), "plugins")
     
-    # যদি ফোল্ডার না থাকে তবে তৈরি করবে
     if not os.path.exists(plugins_path):
         os.makedirs(plugins_path)
         return
 
     print("🔌 Loading plugins...")
-    # plugins ফোল্ডারের ভেতরকার সব .py ফাইল চেক করবে
     for loader, module_name, is_pkg in pkgutil.iter_modules([plugins_path]):
         try:
-            # মডিউলটি ইম্পোর্ট করছে
             module = importlib.import_module(f"plugins.{module_name}")
-            
-            # যদি ঐ ফাইলে register নামে কোনো ফাংশন থাকে, সেটা কল করবে
             if hasattr(module, "register"):
                 await module.register(bot)
             print(f"✅ Plugin Loaded: {module_name}")
@@ -1898,23 +1687,15 @@ async def load_plugins():
 
 # --- UPDATED MAIN FUNCTION ---
 async def main():
-    # ১. প্রথমে মেইন বট স্টার্ট হবে
     await bot.start()
-    
-    # ২. এরপর আপনার সব প্লাগইন/ফিচার লোড হবে
     await load_plugins()
-    
-    # ৩. এরপর ওয়ার্কার স্টার্ট হবে
     await start_worker() 
     
     print("✅ Bot and Worker are Online with Plugin Support!")
-    
-    # বটকে চালু রাখার জন্য ওয়েট করবে
     await asyncio.Event().wait()
 
 # --- ENTRY POINT ---
 if __name__ == "__main__":
-    # Flask এবং Pinger আগের মতোই থাকবে
     flask_thread = Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
