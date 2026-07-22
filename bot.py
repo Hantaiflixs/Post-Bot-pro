@@ -59,7 +59,7 @@ if not all([BOT_TOKEN, API_ID, API_HASH, TMDB_API_KEY, MONGO_URL]):
     exit(1)
 
 # ====================================================================
-# 🔥 DATABASE CONNECTION
+# 🔥 DATABASE CONNECTION (MONGODB)
 # ====================================================================
 try:
     mongo_client = AsyncIOMotorClient(MONGO_URL)
@@ -226,8 +226,7 @@ def get_font(size=60, bold=False):
 
 def upload_image_core(file_content):
     try:
-        url = "https://catbox.moe/user/api.php"
-        response = requests.post(url, data={"reqtype": "fileupload", "userhash": ""}, files={"fileToUpload": ("image.png", file_content, "image/png")}, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, verify=False)
+        response = requests.post("https://catbox.moe/user/api.php", data={"reqtype": "fileupload", "userhash": ""}, files={"fileToUpload": ("image.png", file_content, "image/png")}, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, verify=False)
         if response.status_code == 200: return response.text.strip()
     except: pass
     return None
@@ -322,7 +321,7 @@ def apply_badge_to_poster(poster_bytes, text):
     except: return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 ADVANCED HTML GENERATOR (NEW 2-STEP UI WITH AD-BLOCK DETECT & PUSH)
+# 🔥 ADVANCED HTML GENERATOR (NEW UI WITH AD-BLOCK & RGB BUTTONS)
 # ============================================================================
 def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, admin_share_percent=20):
     title = data.get("title") or data.get("name")
@@ -395,7 +394,6 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         for _ in range(100 - int(admin_share_percent)): weighted_ad_list.append(random.choice(user_ad_links_list))
     random.shuffle(weighted_ad_list) 
 
-    # Clean description for JSON-LD
     clean_desc = overview.replace('"', "'").replace('\n', ' ')
 
     return f"""
@@ -674,6 +672,18 @@ def generate_image(data):
 try: bot = Client("moviebot", api_id=int(API_ID), api_hash=API_HASH, bot_token=BOT_TOKEN)
 except Exception as e: logger.critical(f"Bot Init Error: {e}"); exit(1)
 
+def generate_file_caption(details):
+    title = details.get("title") or details.get("name") or "Unknown"
+    year = (details.get("release_date") or details.get("first_air_date") or "----")[:4]
+    rating = f"{details.get('vote_average', 0):.1f}/10"
+    
+    if details.get('is_manual'): genres, lang = "Movie/Series", details.get("custom_language") or "N/A"
+    else:
+        genres = ", ".join([g['name'] for g in details.get('genres', [])][:3])
+        lang = details.get("custom_language") or "Dual Audio"
+        
+    return f"🎬 **{title} ({year})**\n━━━━━━━━━━━━━━━━━━━━━━━\n⭐ Rating: {rating}\n🎭 Genre: {genres}\n🔊 Language: {lang}\n\n🤖 Join: @{(bot.me).username}"
+
 @bot.on_message(filters.command("start") & filters.private)
 async def start_cmd(client, message):
     uid = message.from_user.id
@@ -912,9 +922,9 @@ async def on_select(client, cb):
         if not details: return await cb.message.edit_text("❌ Details not found.")
         user_conversations[cb.from_user.id] = { "details": details, "links":[], "state": "wait_lang" }
         await cb.message.edit_text(f"✅ Selected: **{details.get('title') or details.get('name')}**\n\n🗣️ Enter **Language**:")
-    except: pass
+    except Exception as e: logger.error(f"Select error: {e}")
 
-# 🔥 BACKGROUND ASYNC UPLOAD (WITH PROPER ERROR HANDLING)
+# 🔥 BACKGROUND ASYNC UPLOAD (WITH PROPER FLOODWAIT PROTECTION)
 async def process_file_upload(client, message, uid, temp_name):
     convo = user_conversations.get(uid)
     if not convo: return
@@ -925,23 +935,27 @@ async def process_file_upload(client, message, uid, temp_name):
     try:
         async with upload_semaphore:
             await status_msg.edit_text(f"⏳ **টেলিগ্রাম ডাটাবেসে সেভ হচ্ছে...**")
-            copied_msg = await message.copy(chat_id=DB_CHANNEL_ID)
             
+            copied_msg = await message.copy(chat_id=DB_CHANNEL_ID)
             bot_username = client.me.username if client.me else (await client.get_me()).username
             tg_link = f"https://t.me/{bot_username}?start=get-{copied_msg.id}"
+            
             convo["links"].append({
-                "label": temp_name, "tg_url": tg_link, "gofile_url": None, "fileditch_url": None, "tmpfiles_url": None, "pixel_url": None, "dood_url": None, "stape_url": None, "filemoon_url": None, "mixdrop_url": None, "is_grouped": True
+                "label": temp_name, 
+                "tg_url": tg_link, 
+                "gofile_url": None, "fileditch_url": None, "tmpfiles_url": None, "pixel_url": None, "dood_url": None, "stape_url": None, "filemoon_url": None, "mixdrop_url": None, 
+                "is_grouped": True
             })
             await status_msg.edit_text(f"✅ **আপলোড সম্পন্ন:** {temp_name}")
             
     except Exception as e:
         logger.error(f"Upload Error: {e}")
-        error_text = f"❌ **আপলোড ফেইল হয়েছে!**\nকারণ: `{e}`\n\n⚠️ **দয়া করে চেক করুন বটকে তোমার ডাটাবেস চ্যানেল ({DB_CHANNEL_ID}) এ Admin করা হয়েছে কিনা।**"
-        await status_msg.edit_text(error_text)
+        await status_msg.edit_text(f"❌ **আপলোড ফেইল হয়েছে!**\nকারণ: `{e}`\n\n⚠️ **দয়া করে চেক করুন বটকে ডাটাবেস চ্যানেলে Admin করা হয়েছে কিনা।**")
     finally:
         convo["pending_uploads"] = max(0, convo.get("pending_uploads", 0) - 1)
 
-@bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "cancel"]))
+# 🔥 MAIN TEXT HANDLER (ALL MANUAL STATES RESTORED)
+@bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare", "setdel", "setapi", "cancel", "repost", "setup", "myconfig", "delsetup"]))
 async def text_handler(client, message):
     uid = message.from_user.id
     if uid not in user_conversations: return
@@ -949,8 +963,49 @@ async def text_handler(client, message):
     convo = user_conversations[uid]
     state = convo.get("state")
     text = message.text.strip() if message.text else ""
+    
+    if state == "manual_title":
+        convo["details"]["title"] = text
+        convo["state"] = "manual_plot"
+        await message.reply_text("📝 এবার মুভির **গল্প/Plot** লিখুন:")
+        
+    elif state == "manual_plot":
+        convo["details"]["overview"] = text
+        convo["state"] = "manual_poster"
+        await message.reply_text("🖼️ এবার একটি **পোস্টার (Photo)** সেন্ড করুন:")
+        
+    elif state == "manual_poster":
+        if not message.photo: return await message.reply_text("⚠️ দয়া করে ছবি পাঠান।")
+            
+        msg = await message.reply_text("⏳ Processing Poster...")
+        try:
+            photo_path = await message.download()
+            img_url = upload_to_catbox(photo_path) 
+            os.remove(photo_path)
+            
+            if img_url:
+                convo["details"]["manual_poster_url"] = img_url
+                convo["state"] = "ask_screenshots"
+                await msg.edit_text("✅ Poster Uploaded!\n\n📸 **Add Custom Screenshots?**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📸 Add", callback_data=f"ss_yes_{uid}"), InlineKeyboardButton("⏭️ Skip", callback_data=f"ss_no_{uid}")]]))
+            else: await msg.edit_text("❌ Upload Failed.")
+        except: await msg.edit_text("❌ Error uploading.")
 
-    if state == "wait_lang":
+    elif state == "wait_screenshots":
+        if not message.photo: return await message.reply_text("⚠️ Please send PHOTO.")
+            
+        msg = await message.reply_text("⏳ Uploading SS...")
+        try:
+            photo_path = await message.download()
+            ss_url = upload_to_catbox(photo_path)
+            os.remove(photo_path)
+            
+            if ss_url:
+                if "manual_screenshots" not in convo["details"]: convo["details"]["manual_screenshots"] =[]
+                convo["details"]["manual_screenshots"].append(ss_url)
+                await msg.edit_text(f"✅ Screenshot Added!\nSend another or click DONE.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ DONE", callback_data=f"ss_done_{uid}")]]))
+        except: pass
+
+    elif state == "wait_lang":
         convo["details"]["custom_language"] = text
         convo["state"] = "wait_quality"
         await message.reply_text("💿 Enter **Quality**:")
@@ -968,57 +1023,98 @@ async def text_handler(client, message):
     elif state == "wait_link_url":
         if message.video or message.document:
             asyncio.create_task(process_file_upload(client, message, uid, convo["temp_name"]))
-            convo["state"] = "ask_links"
-            await message.reply_text("✅ আপলোড সারিতে যোগ হয়েছে!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
+            if convo.get("post_id"):
+                 convo["state"] = "edit_mode"
+                 await message.reply_text(f"✅ **{convo['temp_name']}** ব্যাকগ্রাউন্ডে আপলোড শুরু হয়েছে!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
+            else:
+                convo["state"] = "ask_links"
+                await message.reply_text(f"✅ **{convo['temp_name']}** ব্যাকগ্রাউন্ডে আপলোড শুরু হয়েছে!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
 
         elif text.startswith("http"):
             convo["links"].append({"label": convo["temp_name"], "url": text, "is_grouped": False, "gofile_url": None, "fileditch_url": None, "tmpfiles_url": None, "pixel_url": None, "dood_url": None, "stape_url": None, "filemoon_url": None, "mixdrop_url": None})
-            convo["state"] = "ask_links"
-            await message.reply_text(f"✅ Saved!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
-        else:
-            await message.reply_text("⚠️ Invalid Input. URL or File required.")
+            if convo.get("post_id"):
+                 convo["state"] = "edit_mode"
+                 await message.reply_text(f"✅ Saved! Link: `{text}`", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
+            else:
+                convo["state"] = "ask_links"
+                await message.reply_text(f"✅ Saved! Total: {len(convo['links'])}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
+        else: await message.reply_text("⚠️ Invalid Input. URL or File required.")
 
     elif state == "wait_batch_files":
         if text.lower() == "/done":
-            convo["state"] = "ask_links"
-            await message.reply_text("✅ **Batch Accepted!**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
+            if convo.get("post_id"):
+                 convo["state"] = "edit_mode"
+                 await message.reply_text(f"✅ **Batch Files Accepted!**\nঅপেক্ষা করুন, আপলোড শেষ হলে Finish এ ক্লিক করবেন।", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
+            else:
+                convo["state"] = "ask_links"
+                await message.reply_text(f"✅ **Batch Files Accepted!**\nঅপেক্ষা করুন, আপলোড শেষ হলে Finish এ ক্লিক করবেন।", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
         elif message.video or message.document:
-            file_name = getattr(message.video, "file_name", None) or getattr(message.document, "file_name", None) or f"Episode {len(convo.get('links',[]))+1}"
+            file_name = getattr(message.video, "file_name", None) or getattr(message.document, "file_name", None)
+            if not file_name: file_name = f"Episode {len(convo.get('links',[])) + convo.get('pending_uploads', 0) + 1}"
             asyncio.create_task(process_file_upload(client, message, uid, file_name))
+        else: await message.reply_text("⚠️ দয়া করে ভিডিও/ফাইল দিন অথবা শেষ হলে /done লিখুন।")
 
     elif state == "wait_badge_text":
         convo["details"]["badge_text"] = text
         await message.reply_text("🛡️ **Safety Check:**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Safe", callback_data=f"safe_yes_{uid}"), InlineKeyboardButton("🔞 18+", callback_data=f"safe_no_{uid}")]]))
 
+@bot.on_callback_query(filters.regex("^ss_"))
+async def ss_cb(client, cb):
+    try: action, uid = cb.data.rsplit("_", 1); uid = int(uid)
+    except: return
+    if action == "ss_yes":
+        user_conversations[uid]["state"] = "wait_screenshots"
+        user_conversations[uid]["details"]["manual_screenshots"] =[]
+        await cb.message.edit_text("📸 **Send Screenshots now.**")
+    else:
+        user_conversations[uid]["state"] = "wait_lang"
+        await cb.message.edit_text("🗣️ Enter **Language** (e.g. Hindi):")
+
 @bot.on_callback_query(filters.regex("^lnk_"))
 async def link_cb(client, cb):
-    uid = int(cb.data.rsplit("_", 1)[1])
-    if cb.data.startswith("lnk_yes"):
+    try: action, uid = cb.data.rsplit("_", 1); uid = int(uid)
+    except: return
+    if action == "lnk_yes":
         user_conversations[uid]["state"] = "wait_link_name"
-        btns = [[InlineKeyboardButton("🎬 1080p", callback_data=f"setlname_1080p_{uid}"), InlineKeyboardButton("🎬 720p", callback_data=f"setlname_720p_{uid}")],[InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}"), InlineKeyboardButton("📁 Default", callback_data=f"setlname_telegram_{uid}")],[InlineKeyboardButton("📦 Batch Upload", callback_data=f"setlname_batch_{uid}")]]
-        await cb.message.edit_text("👇 বাটনের ধরন সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
+        btns = [[InlineKeyboardButton("🎬 1080p", callback_data=f"setlname_1080p_{uid}"), InlineKeyboardButton("🎬 720p", callback_data=f"setlname_720p_{uid}"), InlineKeyboardButton("🎬 480p", callback_data=f"setlname_480p_{uid}")],[InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}"), InlineKeyboardButton("📁 Default", callback_data=f"setlname_telegram_{uid}")],[InlineKeyboardButton("📦 Batch Upload (Series)", callback_data=f"setlname_batch_{uid}")]]
+        await cb.message.edit_text("👇 বাটনের ধরন বা কোয়ালিটি সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
     else:
-        if user_conversations.get(uid, {}).get("pending_uploads", 0) > 0:
-            return await cb.answer("⏳ ফাইল আপলোড শেষ হওয়া পর্যন্ত অপেক্ষা করুন...", show_alert=True)
+        if user_conversations.get(uid, {}).get("pending_uploads", 0) > 0: return await cb.answer("⏳ ফাইল আপলোড শেষ হওয়া পর্যন্ত অপেক্ষা করুন...", show_alert=True)
         user_conversations[uid]["state"] = "wait_badge_text"
-        await cb.message.edit_text("🖼️ **Badge Text?**\nলিখে পাঠান অথবা Skip করুন:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Skip", callback_data=f"skip_badge_{uid}")]]))
+        await cb.message.edit_text("🖼️ **Badge Text?**\n\nলিখে পাঠান অথবা Skip করুন:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Skip", callback_data=f"skip_badge_{uid}")]]))
+
+@bot.on_callback_query(filters.regex("^add_lnk_edit_"))
+async def add_lnk_edit(client, cb):
+    uid = int(cb.data.split("_")[-1])
+    if uid in user_conversations:
+        user_conversations[uid]["state"] = "wait_link_name"
+        btns = [[InlineKeyboardButton("🎬 1080p", callback_data=f"setlname_1080p_{uid}"), InlineKeyboardButton("🎬 720p", callback_data=f"setlname_720p_{uid}"), InlineKeyboardButton("🎬 480p", callback_data=f"setlname_480p_{uid}")],[InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}"), InlineKeyboardButton("📁 Default", callback_data=f"setlname_telegram_{uid}")],[InlineKeyboardButton("📦 Batch Upload (Series)", callback_data=f"setlname_batch_{uid}")]]
+        await cb.message.edit_text("👇 বাটনের ধরন বা কোয়ালিটি সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
 
 @bot.on_callback_query(filters.regex("^setlname_"))
 async def set_lname_cb(client, cb):
-    _, action, uid = cb.data.split("_")
-    uid = int(uid)
+    try: _, action, uid = cb.data.split("_"); uid = int(uid)
+    except: return
     if action in["1080p", "720p", "480p"]:
         user_conversations[uid]["temp_name"] = action; user_conversations[uid]["state"] = "wait_link_url"
-        await cb.message.edit_text(f"✅ Set: **{action}**\n🔗 **URL** বা **ফাইল** দিন:")
+        await cb.message.edit_text(f"✅ কোয়ালিটি সেট: **{action}**\n\n🔗 এবার **URL** বা **ভিডিও ফাইল** দিন:")
     elif action == "custom":
         user_conversations[uid]["state"] = "wait_link_name_custom"
-        await cb.message.edit_text("📝 বাটনের নাম লিখুন:")
+        await cb.message.edit_text("📝 কাস্টম বাটনের নাম লিখুন (যেমন: 4K, 1080p 60fps বা Ep-01):")
     elif action == "batch":
         user_conversations[uid]["state"] = "wait_batch_files"
-        await cb.message.edit_text("📦 **Batch Mode:** সব ফাইল ফরোয়ার্ড করুন। শেষে `/done` লিখুন।")
+        await cb.message.edit_text("📦 **Batch Mode:**\n\nআপনার সিরিজের সব ফাইল বা এপিসোড একসাথে ফরোয়ার্ড করুন।\nফাইলের নামগুলোই এপিসোড নাম হিসেবে সেট হবে।\nসব দেওয়া হলে টাইপ করুন: `/done`")
     else:
         user_conversations[uid]["temp_name"] = "Telegram Files"; user_conversations[uid]["state"] = "wait_link_url"
-        await cb.message.edit_text("✅ বাটন সেট। 🔗 **URL** বা **ফাইল** দিন:")
+        await cb.message.edit_text("✅ বাটন সেট। 🔗 এবার **URL** বা **ভিডিও ফাইল** দিন:")
+
+@bot.on_callback_query(filters.regex("^gen_edit_"))
+async def gen_edit_finish(client, cb):
+    uid = int(cb.data.split("_")[-1])
+    if uid in user_conversations:
+        if user_conversations[uid].get("pending_uploads", 0) > 0: return await cb.answer("⏳ ফাইল আপলোড শেষ হওয়া পর্যন্ত অপেক্ষা করুন...", show_alert=True)
+        await cb.answer("⏳ Generating...", show_alert=False)
+        await generate_final_post(client, uid, cb.message)
 
 @bot.on_callback_query(filters.regex("^skip_badge_"))
 async def skip_badge_cb(client, cb):
@@ -1029,15 +1125,16 @@ async def skip_badge_cb(client, cb):
 
 @bot.on_callback_query(filters.regex("^safe_"))
 async def safety_cb(client, cb):
-    action, uid = cb.data.rsplit("_", 1)
-    user_conversations[int(uid)]["details"]["force_adult"] = (action == "safe_no")
+    try: action, uid = cb.data.rsplit("_", 1); uid = int(uid)
+    except: return
+    user_conversations[uid]["details"]["force_adult"] = True if action == "safe_no" else False
     btns = [[InlineKeyboardButton("🔴 Netflix (Dark)", callback_data=f"theme_netflix_{uid}")],[InlineKeyboardButton("🔵 Prime (Blue)", callback_data=f"theme_prime_{uid}")],[InlineKeyboardButton("⚪ Anime (Light)", callback_data=f"theme_light_{uid}")]]
-    await cb.message.edit_text("🎨 **ওয়েবসাইটের থিম (Theme):**", reply_markup=InlineKeyboardMarkup(btns))
+    await cb.message.edit_text("🎨 **ওয়েবসাইটের থিম (Theme) সিলেক্ট করুন:**", reply_markup=InlineKeyboardMarkup(btns))
 
 @bot.on_callback_query(filters.regex("^theme_"))
 async def theme_cb(client, cb):
-    _, theme_name, uid = cb.data.split("_")
-    uid = int(uid)
+    try: _, theme_name, uid = cb.data.split("_"); uid = int(uid)
+    except: return
     user_conversations[uid]["details"]["theme"] = theme_name
     await generate_final_post(client, uid, cb.message)
 
@@ -1060,14 +1157,19 @@ async def generate_final_post(client, uid, message):
         convo["final"] = {"html": html}
         
         btns = [[InlineKeyboardButton("📄 Get Blogger Code", callback_data=f"get_code_{uid}")]]
-        if img_io: await client.send_photo(message.chat.id, img_io, caption=caption, reply_markup=InlineKeyboardMarkup(btns))
-        else: await client.send_message(message.chat.id, caption, reply_markup=InlineKeyboardMarkup(btns))
-        await status_msg.delete()
-    except Exception as e: await status_msg.edit_text(f"❌ **Error:** `{e}`")
+        if img_io:
+            await client.send_photo(message.chat.id, img_io, caption=caption, reply_markup=InlineKeyboardMarkup(btns))
+            await status_msg.delete()
+        else:
+            await client.send_message(message.chat.id, caption, reply_markup=InlineKeyboardMarkup(btns))
+            await status_msg.delete()
+    except Exception as e:
+        await status_msg.edit_text(f"❌ **Error:** `{e}`")
 
 @bot.on_callback_query(filters.regex("^get_code_"))
 async def get_code(client, cb):
-    uid = int(cb.data.rsplit("_", 1)[1])
+    try: uid = int(cb.data.rsplit("_", 1)[1])
+    except: return
     data = user_conversations.get(uid)
     if not data or "final" not in data: return await cb.answer("Expired.", show_alert=True)
     await cb.answer("⏳ Generating Code...", show_alert=False)
@@ -1079,25 +1181,34 @@ async def get_code(client, cb):
         file.name = "post.html"
         await client.send_document(cb.message.chat.id, file, caption="⚠️ Link failed. Download File.")
 
-# --- PLUGIN LOADER ---
 async def load_plugins():
     plugins_path = os.path.join(os.path.dirname(__file__), "plugins")
-    if not os.path.exists(plugins_path): return
+    if not os.path.exists(plugins_path): os.makedirs(plugins_path); return
+    print("🔌 Loading plugins...")
     for loader, module_name, is_pkg in pkgutil.iter_modules([plugins_path]):
         try:
             module = importlib.import_module(f"plugins.{module_name}")
             if hasattr(module, "register"): await module.register(bot)
-        except Exception as e: logger.error(f"Failed to load {module_name}: {e}")
+            print(f"✅ Plugin Loaded: {module_name}")
+        except Exception as e: print(f"❌ Failed to load plugin {module_name}: {e}")
 
-# --- MAIN ---
 async def main():
     await bot.start()
     await load_plugins()
     await start_worker() 
-    print("✅ Bot is Online with Tele-Only Uploads & Custom UI!")
+    print("✅ Bot and Worker are Online with Plugin Support!")
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    Thread(target=run_flask, daemon=True).start()
-    Thread(target=keep_alive_pinger, daemon=True).start()
-    asyncio.get_event_loop().run_until_complete(main())
+    flask_thread = Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+    
+    ping_thread = Thread(target=keep_alive_pinger)
+    ping_thread.daemon = True
+    ping_thread.start()
+    
+    print("🚀 Ultimate SPA Bot is Starting with Plugin System...")
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
