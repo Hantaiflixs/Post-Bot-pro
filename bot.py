@@ -59,7 +59,7 @@ if not all([BOT_TOKEN, API_ID, API_HASH, TMDB_API_KEY, MONGO_URL]):
     exit(1)
 
 # ====================================================================
-# 🔥 DATABASE CONNECTION (MONGODB)
+# 🔥 DATABASE CONNECTION
 # ====================================================================
 try:
     mongo_client = AsyncIOMotorClient(MONGO_URL)
@@ -226,7 +226,8 @@ def get_font(size=60, bold=False):
 
 def upload_image_core(file_content):
     try:
-        response = requests.post("https://catbox.moe/user/api.php", data={"reqtype": "fileupload", "userhash": ""}, files={"fileToUpload": ("image.png", file_content, "image/png")}, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, verify=False)
+        url = "https://catbox.moe/user/api.php"
+        response = requests.post(url, data={"reqtype": "fileupload", "userhash": ""}, files={"fileToUpload": ("image.png", file_content, "image/png")}, headers={"User-Agent": "Mozilla/5.0"}, timeout=10, verify=False)
         if response.status_code == 200: return response.text.strip()
     except: pass
     return None
@@ -321,7 +322,7 @@ def apply_badge_to_poster(poster_bytes, text):
     except: return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 ADVANCED HTML GENERATOR
+# 🔥 ADVANCED HTML GENERATOR (NEW 2-STEP UI WITH AD-BLOCK DETECT & PUSH)
 # ============================================================================
 def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, admin_share_percent=20):
     title = data.get("title") or data.get("name")
@@ -332,58 +333,58 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     is_adult = data.get('adult', False) or data.get('force_adult', False)
 
     theme = data.get("theme", "netflix")
-    if theme == "netflix": root_css = "--bg-color: #0f0f13; --box-bg: #1a1a24; --text-main: #ffffff; --text-muted: #d1d1d1; --primary: #E50914; --accent: #00d2ff; --border: #2a2a35; --btn-grad: linear-gradient(90deg, #E50914 0%, #ff5252 100%);"
-    elif theme == "prime": root_css = "--bg-color: #0f171e; --box-bg: #1b2530; --text-main: #ffffff; --text-muted: #8197a4; --primary: #00A8E1; --accent: #00A8E1; --border: #2c3e50; --btn-grad: linear-gradient(90deg, #00A8E1 0%, #00d2ff 100%);"
-    else: root_css = "--bg-color: #f4f4f9; --box-bg: #ffffff; --text-main: #333333; --text-muted: #555555; --primary: #6200ea; --accent: #6200ea; --border: #dddddd; --btn-grad: linear-gradient(90deg, #6200ea 0%, #b388ff 100%);"
+    if theme == "netflix": root_css = "--bg-color: #0f0f13; --box-bg: #1a1a24; --text-main: #ffffff; --text-muted: #d1d1d1; --primary: #E50914; --accent: #00d2ff; --border: #2a2a35; --btn-grad: linear-gradient(90deg, #E50914 0%, #ff5252 100%); --btn-shadow: 0 5px 15px rgba(229, 9, 20, 0.4);"
+    elif theme == "prime": root_css = "--bg-color: #0f171e; --box-bg: #1b2530; --text-main: #ffffff; --text-muted: #8197a4; --primary: #00A8E1; --accent: #00A8E1; --border: #2c3e50; --btn-grad: linear-gradient(90deg, #00A8E1 0%, #00d2ff 100%); --btn-shadow: 0 5px 15px rgba(0, 168, 225, 0.4);"
+    else: root_css = "--bg-color: #f4f4f9; --box-bg: #ffffff; --text-main: #333333; --text-muted: #555555; --primary: #6200ea; --accent: #6200ea; --border: #dddddd; --btn-grad: linear-gradient(90deg, #6200ea 0%, #b388ff 100%); --btn-shadow: 0 5px 15px rgba(98, 0, 234, 0.4);"
 
     lang_str = data.get('custom_language', 'Dual Audio').strip()
     if data.get('is_manual'):
-        genres_str, year, rating, runtime_str, cast_names = "Custom / Unknown", "N/A", "N/A", "N/A", "N/A"
+        genres_str, year, rating, runtime_str, cast_names = "Custom / Unknown", "N/A", "0.0", "N/A", "N/A"
     else:
         genres_list =[g['name'] for g in data.get('genres',[])]
         genres_str = ", ".join(genres_list) if genres_list else "Movie"
         year = str(data.get("release_date") or data.get("first_air_date") or "----")[:4]
-        rating = f"{data.get('vote_average', 0):.1f}/10"
+        rating = f"{data.get('vote_average', 0):.1f}"
         runtime = data.get('runtime') or (data.get('episode_run_time',[0])[0] if data.get('episode_run_time') else "N/A")
         runtime_str = f"{runtime} min" if runtime != "N/A" else "N/A"
         cast_list = data.get('credits', {}).get('cast',[])
         cast_names = ", ".join([c['name'] for c in cast_list[:4]]) if cast_list else "Unknown"
 
-    poster_html = f'<div class="nsfw-container" onclick="revealNSFW(this)"><img src="{poster}" class="nsfw-blur"><div class="nsfw-warning">🔞 18+ Tap to View</div></div>' if is_adult else f'<img src="{poster}">'
-
-    trailer_key = ""
-    for v in data.get('videos', {}).get('results',[]):
-        if v.get('type') == 'Trailer' and v.get('site') == 'YouTube': trailer_key = v.get('key'); break
-    trailer_html = f'<div class="section-title">🎬 Official Trailer</div><div class="video-container"><iframe src="https://www.youtube.com/embed/{trailer_key}" allowfullscreen></iframe></div>' if trailer_key else ""
-
-    screenshots = data.get('manual_screenshots',[])
-    if not screenshots and not data.get('is_manual'): screenshots =[f"https://image.tmdb.org/t/p/w780{b['file_path']}" for b in data.get('images', {}).get('backdrops',[])[:6]] 
-    ss_html = ""
-    if screenshots:
-        ss_imgs = "".join([f'<div class="nsfw-container" onclick="revealNSFW(this)"><img src="{img}" class="nsfw-blur"></div>' if is_adult else f'<img src="{img}">' for img in screenshots])
-        ss_html = f'<div class="section-title">📸 Screenshots</div><div class="screenshot-grid">{ss_imgs}</div>'
-
-    # 🔥 GENERATE SERVER LIST (ONLY TELEGRAM & CUSTOM LINKS) 🔥
+    # 🔥 GENERATE SERVER LIST (RGB BUTTONS)
     server_list_html = ""
-    grouped_links = {}
-    for link in links:
-        lbl = link.get('label', 'Download Link')
-        if lbl not in grouped_links: grouped_links[lbl] = []
-        grouped_links[lbl].append(link)
+    if not links:
+        server_list_html = '<div style="color: #ff5252; text-align: center; padding: 15px; background: rgba(255,0,0,0.1); border-radius: 8px;">⚠️ দুঃখিত! ডাটাবেসে সেভ না হওয়ায় লিংক তৈরি হয়নি।</div>'
+    else:
+        grouped_links = {}
+        for link in links:
+            lbl = link.get('label', 'Download Link')
+            if lbl not in grouped_links: grouped_links[lbl] = []
+            grouped_links[lbl].append(link)
 
-    for lbl, grp in grouped_links.items():
-        server_list_html += f'<div class="quality-title">📺 {lbl}</div>\n<div class="server-grid">\n'
-        for link in grp:
-            if link.get("is_grouped"):
-                if link.get('tg_url'):
+        for lbl, grp in grouped_links.items():
+            server_list_html += f'<div class="quality-title">📺 {lbl}</div>\n<div class="server-grid">\n'
+            for link in grp:
+                if link.get("is_grouped") and link.get("tg_url"):
                     tg_b64 = base64.b64encode(link['tg_url'].encode('utf-8')).decode('utf-8')
-                    server_list_html += f'<button class="final-server-btn tg-btn" onclick="goToLink(\'{tg_b64}\')">✈️ Telegram Fast Download</button>'
-            else:
-                url_str = link.get('url', '')
-                if url_str:
-                    encoded_url = base64.b64encode(url_str.encode('utf-8')).decode('utf-8')
-                    server_list_html += f'<button class="final-server-btn tg-btn" onclick="goToLink(\'{encoded_url}\')">📥 Direct Link</button>'
-        server_list_html += '</div>\n'
+                    server_list_html += f'''
+                    <div class="rgb-btn-wrapper">
+                        <button class="rgb-btn" onclick="goToLink('{tg_b64}')">
+                            <div style="font-size:14px; font-weight:bold; color:var(--text-main); margin-bottom:3px;">⬇️ Download {lbl}</div>
+                            <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; background:rgba(0,0,0,0.5); border-radius:4px; padding:2px 5px; display:inline-block;">Telegram Server</div>
+                        </button>
+                    </div>'''
+                else:
+                    url_str = link.get('url', '')
+                    if url_str:
+                        encoded_url = base64.b64encode(url_str.encode('utf-8')).decode('utf-8')
+                        server_list_html += f'''
+                        <div class="rgb-btn-wrapper">
+                            <button class="rgb-btn" onclick="goToLink('{encoded_url}')">
+                                <div style="font-size:14px; font-weight:bold; color:var(--text-main); margin-bottom:3px;">⬇️ Direct Link</div>
+                                <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; background:rgba(0,0,0,0.5); border-radius:4px; padding:2px 5px; display:inline-block;">Direct Server</div>
+                            </button>
+                        </div>'''
+            server_list_html += '</div>\n'
 
     # 🔥 REVENUE SHARE LOGIC 🔥
     weighted_ad_list =[]
@@ -394,80 +395,124 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         for _ in range(100 - int(admin_share_percent)): weighted_ad_list.append(random.choice(user_ad_links_list))
     random.shuffle(weighted_ad_list) 
 
-    style_html = f"""
-    <style>
-        :root {{ {root_css} }}
-        .app-wrapper {{ font-family: sans-serif; background: var(--bg-color); border: 1px solid var(--border); border-radius: 12px; max-width: 650px; margin: 20px auto; padding: 20px; color: var(--text-main); box-sizing: border-box; }}
-        .app-wrapper * {{ box-sizing: border-box; }}
-        .movie-title {{ color: var(--accent); font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 20px; text-shadow: 1px 1px 5px rgba(0,0,0,0.3); }}
-        .info-box {{ display: flex; background: var(--box-bg); border-radius: 12px; padding: 15px; gap: 20px; margin-bottom: 20px; align-items: center; border: 1px solid var(--border); }}
-        @media (max-width: 480px) {{ .info-box {{ flex-direction: column; text-align: center; }} }}
-        .info-poster img {{ width: 150px; border-radius: 8px; border: 2px solid var(--border); }}
-        .info-text {{ flex: 1; text-align: left; font-size: 14px; color: var(--text-muted); line-height: 1.7; }}
-        .info-text span {{ color: var(--primary); font-weight: bold; }}
-        .section-title {{ font-size: 18px; color: var(--text-main); margin: 20px 0 10px; border-bottom: 2px solid var(--primary); display: inline-block; padding-bottom: 5px; font-weight: bold; }}
-        .plot-box {{ background: rgba(0,0,0,0.05); padding: 15px; border-left: 4px solid var(--primary); border-radius: 4px; font-size: 14px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; border: 1px solid var(--border); }}
-        .video-container {{ position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--border); }}
-        .video-container iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }}
-        .screenshot-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 25px; }}
-        .screenshot-grid img {{ width: 100%; border-radius: 8px; border: 1px solid var(--border); transition: 0.3s; }}
-        .screenshot-grid img:hover {{ transform: scale(1.05); cursor: pointer; }}
-        .action-grid {{ display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }}
-        .main-btn {{ width: 100%; padding: 16px; font-size: 16px; font-weight: bold; color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: 0.3s; background: linear-gradient(90deg, #0088cc 0%, #00d2ff 100%); }}
-        .main-btn:disabled {{ filter: grayscale(1); cursor: not-allowed; opacity: 0.8; }}
-        #view-links {{ display: none; background: var(--box-bg); padding: 20px; border-radius: 10px; border: 1px solid var(--border); text-align: center; }}
-        .success-title {{ color: #00e676; font-size: 18px; margin-bottom: 15px; border-bottom: 1px dashed var(--border); padding-bottom: 10px; font-weight: bold; }}
-        .quality-title {{ font-size: 16px; font-weight: bold; color: var(--accent); margin-top: 20px; margin-bottom: 10px; background: rgba(0,0,0, 0.1); padding: 8px 12px; border-radius: 6px; text-align: left; border-left: 3px solid var(--accent); border: 1px solid var(--border); }}
-        .server-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px; }}
-        .final-server-btn {{ width: 100%; padding: 14px; font-size: 14px; font-weight: 600; color: #fff; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; background: #0088cc; }}
-        .final-server-btn:hover {{ filter: brightness(1.2); transform: scale(1.02); }}
-        .promo-box {{ margin-top: 25px; text-align: center; }}
-        .promo-box img {{ width: 100%; max-width: 300px; border-radius: 20px; border: 1px solid var(--border); }}
-        .nsfw-container {{ position: relative; display: inline-block; cursor: pointer; overflow: hidden; border-radius: 8px; width: 100%; height: 100%; }}
-        .nsfw-blur {{ filter: blur(25px) !important; transform: scale(1.1); transition: 0.5s; width: 100%; height: 100%; display: block; }}
-        .nsfw-warning {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); color: #ff5252; padding: 10px; border-radius: 8px; font-weight: bold; text-align: center; border: 2px solid #ff5252; z-index: 5; pointer-events: none; }}
-    </style>
-    """
-
-    script_html = f"""
-    <script>
-    const AD_LINKS = {json.dumps(weighted_ad_list)};
-    function startUnlock(btn, type) {{
-        window.open(AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)], '_blank'); 
-        btn.disabled = true;
-        let timeLeft = 5;
-        let timer = setInterval(function() {{
-            btn.innerHTML = "⏳ Please Wait... " + timeLeft + "s";
-            timeLeft--;
-            if (timeLeft < 0) {{
-                clearInterval(timer);
-                btn.innerHTML = "✅ Unlocked Successfully!";
-                document.getElementById('view-details').style.display = 'none';
-                document.getElementById('view-links').style.display = 'block';
-                window.scrollTo({{top: 0, behavior: 'smooth'}});
-            }}
-        }}, 1000); 
-    }}
-    function goToLink(b64Url) {{ window.location.href = atob(b64Url); }}
-    function revealNSFW(container) {{
-        let img = container.querySelector('.nsfw-blur');
-        if(img) {{ img.classList.remove('nsfw-blur'); img.style.transform = 'scale(1)'; }}
-        let warning = container.querySelector('.nsfw-warning');
-        if(warning) warning.style.display = 'none';
-        container.style.cursor = 'default'; container.onclick = null;
-    }}
-    </script>
-    """
+    # Clean description for JSON-LD
+    clean_desc = overview.replace('"', "'").replace('\n', ' ')
 
     return f"""
-    {style_html}
+    <!-- Hidden tags for Blogger SEO -->
+    <div style="height:0px;width:0px;overflow:hidden;visibility:hidden;display:none;float:left;">
+        <img src="{poster}" alt="{title} Thumbnail" />
+    </div>
+    <div style="display:none;font-size:1px;color:rgba(0,0,0,0);line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+        🎬 {title} - {clean_desc[:100]}... Download now.
+    </div>
+
+    <!-- Schema.org Data -->
+    <script type="application/ld+json">
+    {{
+      "@context": "https://schema.org",
+      "@type": "Movie",
+      "name": "{title}",
+      "image": "{poster}",
+      "description": "{clean_desc[:150]}"
+    }}
+    </script>
+    <script type="application/ld+json">
+    {{
+      "@context": "https://schema.org",
+      "@type": "Movie",
+      "name": "{title}",
+      "image": "{poster}",
+      "description": "{clean_desc[:150]}",
+      "aggregateRating": {{
+        "@type": "AggregateRating",
+        "ratingValue": 0,
+        "bestRating": "10",
+        "ratingCount": "150"
+      }}
+    }}
+    </script>
+
+    <script>
+    async function detectAdBlock() {{
+      let adBlockEnabled = false;
+      const googleAdUrl = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
+      try {{ await fetch(new Request(googleAdUrl)).catch(_ => adBlockEnabled = true); }} catch (e) {{ adBlockEnabled = true; }}
+      if (adBlockEnabled) {{
+        document.body.innerHTML = `
+        <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#0f0f13;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;padding:20px;">
+            <h1 style="color:#ff5252;font-size:50px;">🚫</h1>
+            <h2>Ad-Blocker Detected!</h2>
+            <p style="color:#aaa;max-width:400px;">আমাদের সার্ভার খরচ চালানোর জন্য বিজ্ঞাপনের প্রয়োজন। দয়া করে আপনার <b>Ad-Blocker</b> বন্ধ করে পেজটি রিফ্রেশ দিন।</p>
+            <button onclick="window.location.reload()" style="background:#E50914;color:#fff;border:none;padding:12px 25px;border-radius:5px;cursor:pointer;font-weight:bold;margin-top:20px;font-size:16px;">আমি বন্ধ করেছি, রিফ্রেশ দিন!</button>
+        </div>`;
+      }}
+    }}
+    window.onload = function() {{ detectAdBlock(); }};
+    </script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {{ {root_css} }}
+        body {{ margin: 0; padding: 0; background: var(--bg-color) !important; background-image: linear-gradient(to bottom, rgba(5,6,10,0.85), var(--bg-color)), url('{poster}') !important; background-attachment: fixed !important; background-size: cover !important; background-position: center !important; font-family: 'Poppins', sans-serif; }}
+        
+        .app-wrapper {{ max-width: 800px; margin: 20px auto; background: var(--box-bg); border-radius: 17px; padding: 25px; color: var(--text-main); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.9); position: relative; overflow: visible !important; }}
+        
+        .movie-title {{ font-family: 'Oswald', sans-serif; font-size: 30px; color: var(--text-main); text-align: center; text-transform: uppercase; margin-bottom: 20px; background: linear-gradient(to right, #fff 20%, #777 80%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 1px; }}
+        
+        .info-box {{ display: flex; gap: 20px; margin-bottom: 25px; background: rgba(255,255,255,0.03) !important; border-radius: 20px !important; padding: 25px !important; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05) !important; }}
+        .info-poster img {{ width: 150px; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.1) !important; transition: 0.5s; }}
+        .info-poster img:hover {{ transform: scale(1.05) translateY(-10px); box-shadow: 0 10px 30px rgba(229, 9, 20, 0.4) !important; }}
+        
+        .info-text {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; width: 100%; }}
+        .info-text div {{ background: rgba(0,0,0,0.1); padding: 10px; border-radius: 8px; border-left: 3px solid var(--primary); font-size: 13px; color: var(--text-main); border: 1px solid var(--border); margin-bottom: 8px !important; }}
+        .info-text span {{ display: block; color: var(--primary); font-size: 10px; text-transform: uppercase; font-weight: 600; margin-bottom: 3px; letter-spacing: 1px; }}
+        
+        @media (max-width: 500px) {{ .info-box {{ flex-direction: column; align-items: center; text-align: center; }} .info-poster img {{ width: 140px; }} }}
+        
+        .section-title {{ font-size: 16px; color: var(--text-main); margin: 25px 0 15px; border-bottom: 2px solid var(--primary); display: inline-block; padding-bottom: 4px; font-weight: 600; text-transform: uppercase; }}
+        .plot-box {{ background: rgba(0,0,0,0.1); padding: 15px; border-radius: 8px; font-size: 13px; line-height: 1.7; color: var(--text-muted); border: 1px solid var(--border); text-align: justify; }}
+        
+        .guide-box {{ background: rgba(0,0,0,0.1); border: 1px dashed var(--primary); padding: 15px; border-radius: 10px; margin-top: 25px; margin-bottom: 20px; }}
+        
+        .step-container {{ background: rgba(0,0,0,0.2); padding: 25px; border-radius: 12px; text-align: center; border: 1px solid var(--border); position: relative; overflow: hidden; }}
+        .step-title {{ color: var(--primary); font-size: 14px; font-weight: 600; letter-spacing: 1px; margin-bottom: 15px; text-transform: uppercase; }}
+        .unlock-btn {{ background: var(--primary); color: #fff; border: none; padding: 15px 20px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; box-shadow: var(--btn-shadow); }}
+        .unlock-btn:disabled {{ background: #555 !important; filter: brightness(0.8); cursor: not-allowed; box-shadow: none; }}
+        
+        #glow-bar {{ position: absolute; bottom: 0; left: 0; height: 100%; width: 0%; background: rgba(255, 255, 255, 0.2); box-shadow: inset 0 0 20px rgba(255,255,255,0.5); transition: width 5s linear; z-index: 1; }}
+
+        .quality-title {{ background: rgba(0,0,0,0.2); border-left: 4px solid var(--primary); border-radius: 4px; padding: 8px 15px; font-size: 13px; font-weight: 600; color: var(--text-main); margin-top: 25px; text-transform: uppercase; border: 1px solid var(--border); background: linear-gradient(90deg, #E50914, transparent) !important; color: #fff !important; border: none !important; }}
+        .server-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 15px; }} 
+        
+        .rgb-btn-wrapper {{ position: relative; border-radius: 8px; padding: 2px; background: linear-gradient(45deg, #ff0000, #ff7300, #fffb00, #48ff00, #00ffd5, #002bff, #7a00ff, #ff00c8, #ff0000); background-size: 400%; animation: glowing 20s linear infinite; }}
+        .rgb-btn {{ background: #1a1c22 !important; width: 100%; height: 100%; border: none; border-radius: 6px; padding: 15px; cursor: pointer; transition: 0.3s; display: flex; flex-direction: column; align-items: center; justify-content: center; }}
+        .rgb-btn:hover {{ background: #E50914 !important; filter: brightness(1.2); transform: translateY(-5px); box-shadow: 0 10px 20px rgba(229, 9, 20, 0.3) !important; }}
+        
+        @keyframes glowing {{ 0% {{ background-position: 0 0; }} 50% {{ background-position: 400% 0; }} 100% {{ background-position: 0 0; }} }}
+        
+        .media-badges {{ display: flex; gap: 8px; justify-content: center; margin-bottom: 15px; flex-wrap: wrap; }}
+        .badge {{ background: var(--primary); color: #fff; font-size: 11px; padding: 4px 12px; border-radius: 20px; font-weight: 600; text-transform: uppercase; box-shadow: var(--btn-shadow); border: 1px solid rgba(255,255,255,0.2); }}
+        .nsfw-blur {{ filter: blur(25px) !important; }}
+    </style>
+
     <div class="app-wrapper">
         <div id="view-details">
-            <div class="movie-title">{title} ({year})</div>
+            <div class="media-badges">
+                <div class="badge">{lang_str}</div>
+                <div class="badge">⭐ {rating}/10</div>
+                <div class="badge">{year}</div>
+                <div class="badge">HEVC</div>
+            </div>
+            
+            <div class="movie-title">{title}</div>
+            
             <div class="info-box">
-                <div class="info-poster">{poster_html}</div>
+                <div class="info-poster">
+                    <img src="{poster}" alt="Poster" class="{'nsfw-blur' if is_adult else ''}">
+                </div>
                 <div class="info-text">
-                    <div><span>⭐ Rating:</span> {rating}</div>
+                    <div><span>⭐ Rating:</span> {rating}/10</div>
                     <div><span>🎭 Genre:</span> {genres_str}</div>
                     <div><span>🗣️ Language:</span> {lang_str}</div>
                     <div><span>⏱️ Runtime:</span> {runtime_str}</div>
@@ -475,31 +520,92 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
                     <div><span>👥 Cast:</span> {cast_names}</div>
                 </div>
             </div>
+            
             <div class="section-title">📖 Storyline</div>
             <div class="plot-box">{overview}</div>
-            {trailer_html}
-            {ss_html}
-            <div class="section-title">📥 Access Links</div>
-            <div style="background: rgba(0,0,0,0.1); padding: 12px; border-radius: 6px; font-size: 13px; text-align: center; margin-bottom: 15px; color: var(--text-muted); border: 1px solid var(--border);">
-                ℹ️ <b>How to Download:</b> Click the button below, wait 5 seconds, and your Telegram Files will unlock automatically.
+
+            <div class="guide-box">
+                <div style="color:var(--primary); font-weight:bold; font-size:15px; margin-bottom:8px;">🎬 কিভাবে ডাউনলোড করবেন?</div>
+                <div style="font-size:13px; color:var(--text-muted); line-height:1.6;">
+                    ১. নিচের <b>STEP 1</b> বাটনে ক্লিক করুন এবং ৫ সেকেন্ড অপেক্ষা করুন।<br>
+                    ২. এরপর বাটনটি সবুজ হয়ে <b>STEP 2</b> লেখা আসবে, সেখানে ক্লিক করে আবার ৫ সেকেন্ড অপেক্ষা করুন।<br>
+                    ৩. ব্যাস! মুভি দেখার এবং ডাউনলোড করার আসল লিংক পেয়ে যাবেন।
+                </div>
             </div>
-            <div class="action-grid">
-                <button class="main-btn btn-download" onclick="startUnlock(this, 'download')">📥 GET TELEGRAM FILES</button>
+
+            <div class="step-container" id="step-box">
+                <div class="step-title" id="st-txt">STEP 1: VERIFICATION</div>
+                <button class="unlock-btn" id="st-btn" onclick="processUnlock()">🔓 UNLOCK LINK (STEP 1)</button>
             </div>
         </div>
-        
-        <div id="view-links">
-            <div class="success-title">✅ Successfully Unlocked!</div>
-            <div class="section-title">📥 Download Links</div>
-            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 15px;">Click a button below to get your file instantly on Telegram.</p>
-            <div class="server-list">{server_list_html}</div>
-        </div>
-        
-        <div class="promo-box">
-            <a href="https://t.me/koreandrama006" target="_blank"><img src="{BTN_TELEGRAM}"></a>
+
+        <div id="view-links" style="display:none;">
+            <div style="text-align:center; color:#00e676; font-size:15px; font-weight:bold; margin-bottom:25px; border:1px solid rgba(0,230,118,0.3); padding:15px; border-radius:8px; background:rgba(0,230,118,0.05);">✅ ALL LINKS UNLOCKED SUCCESSFULLY!</div>
+            
+            {server_list_html}
+            
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="https://t.me/koreandrama006" target="_blank">
+                    <img src="{BTN_TELEGRAM}" style="width: 100%; max-width: 300px; border-radius: 20px; border: 1px solid var(--border);">
+                </a>
+            </div>
         </div>
     </div>
-    {script_html}
+
+    <!-- OneSignal SDK for Push Notifications -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {{
+        await OneSignal.init({{
+          appId: "d8b008a1-623d-495d-b10d-8def7460f2ea",
+        }});
+      }});
+    </script>
+
+    <script>
+    const AD_LINKS = {json.dumps(weighted_ad_list)};
+    let currentStep = 1;
+
+    function processUnlock() {{
+        let btn = document.getElementById('st-btn');
+        let title = document.getElementById('st-txt');
+        
+        let randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
+        window.open(randomAd, '_blank');
+        
+        if (currentStep === 1) {{
+            btn.disabled = true;
+            btn.style.position = 'relative';
+            btn.style.overflow = 'hidden';
+            btn.innerHTML = `<span style="position:relative; z-index:2;">⏳ Verifying... Please Wait 5s</span><div id="glow-bar"></div>`;
+            
+            setTimeout(() => {{ let bar = document.getElementById('glow-bar'); if(bar) bar.style.width = '100%'; }}, 50);
+            
+            setTimeout(() => {{
+                currentStep = 2;
+                btn.disabled = false;
+                btn.style.background = "#00e676";
+                btn.style.boxShadow = "0 5px 15px rgba(0, 230, 118, 0.4)";
+                btn.innerHTML = "🔓 FINAL UNLOCK (STEP 2)";
+                title.innerHTML = "STEP 2: FINAL VERIFICATION";
+                title.style.color = "#00e676";
+            }}, 5000);
+            
+        }} else if (currentStep === 2) {{
+            btn.disabled = true;
+            btn.innerHTML = `<span style="position:relative; z-index:2;">⏳ Finalizing Request...</span><div id="glow-bar"></div>`;
+            setTimeout(() => {{ let bar = document.getElementById('glow-bar'); if(bar) bar.style.width = '100%'; }}, 50);
+            
+            setTimeout(() => {{
+                document.getElementById('view-details').style.display = 'none';
+                document.getElementById('view-links').style.display = 'block';
+                window.scrollTo({{top: 0, behavior: 'smooth'}});
+            }}, 5000);
+        }}
+    }}
+    function goToLink(e) {{ window.location.href = atob(e); }}
+    </script>
     """
 
 def generate_formatted_caption(data, pid=None):
@@ -567,18 +673,6 @@ def generate_image(data):
 
 try: bot = Client("moviebot", api_id=int(API_ID), api_hash=API_HASH, bot_token=BOT_TOKEN)
 except Exception as e: logger.critical(f"Bot Init Error: {e}"); exit(1)
-
-def generate_file_caption(details):
-    title = details.get("title") or details.get("name") or "Unknown"
-    year = (details.get("release_date") or details.get("first_air_date") or "----")[:4]
-    rating = f"{details.get('vote_average', 0):.1f}/10"
-    
-    if details.get('is_manual'): genres, lang = "Movie/Series", details.get("custom_language") or "N/A"
-    else:
-        genres = ", ".join([g['name'] for g in details.get('genres', [])][:3])
-        lang = details.get("custom_language") or "Dual Audio"
-        
-    return f"🎬 **{title} ({year})**\n━━━━━━━━━━━━━━━━━━━━━━━\n⭐ Rating: {rating}\n🎭 Genre: {genres}\n🔊 Language: {lang}\n\n🤖 Join: @{(bot.me).username}"
 
 @bot.on_message(filters.command("start") & filters.private)
 async def start_cmd(client, message):
@@ -818,10 +912,9 @@ async def on_select(client, cb):
         if not details: return await cb.message.edit_text("❌ Details not found.")
         user_conversations[cb.from_user.id] = { "details": details, "links":[], "state": "wait_lang" }
         await cb.message.edit_text(f"✅ Selected: **{details.get('title') or details.get('name')}**\n\n🗣️ Enter **Language**:")
-    except Exception as e: logger.error(f"Select error: {e}")
+    except: pass
 
-
-# 🔥 BACKGROUND ASYNC UPLOAD (ONLY TELEGRAM - NO DOWNLOAD/UPLOAD TO SERVERS)
+# 🔥 BACKGROUND ASYNC UPLOAD (WITH PROPER ERROR HANDLING)
 async def process_file_upload(client, message, uid, temp_name):
     convo = user_conversations.get(uid)
     if not convo: return
@@ -832,36 +925,23 @@ async def process_file_upload(client, message, uid, temp_name):
     try:
         async with upload_semaphore:
             await status_msg.edit_text(f"⏳ **টেলিগ্রাম ডাটাবেসে সেভ হচ্ছে...**")
-            
             copied_msg = await message.copy(chat_id=DB_CHANNEL_ID)
             
-            # 🔥 Fix API Limit Bug: Avoid await client.get_me() dynamically in the loop 
-            bot_username = client.me.username
+            bot_username = client.me.username if client.me else (await client.get_me()).username
             tg_link = f"https://t.me/{bot_username}?start=get-{copied_msg.id}"
-            
-            # 🔥 CRITICAL BUG FIX: Add Empty URL Keys to Prevent "KeyError" in Plugins
             convo["links"].append({
-                "label": temp_name, 
-                "tg_url": tg_link, 
-                "gofile_url": None,
-                "fileditch_url": None,
-                "tmpfiles_url": None,
-                "pixel_url": None,
-                "dood_url": None,
-                "stape_url": None,
-                "filemoon_url": None,
-                "mixdrop_url": None,
-                "is_grouped": True
+                "label": temp_name, "tg_url": tg_link, "gofile_url": None, "fileditch_url": None, "tmpfiles_url": None, "pixel_url": None, "dood_url": None, "stape_url": None, "filemoon_url": None, "mixdrop_url": None, "is_grouped": True
             })
             await status_msg.edit_text(f"✅ **আপলোড সম্পন্ন:** {temp_name}")
             
     except Exception as e:
         logger.error(f"Upload Error: {e}")
-        await status_msg.edit_text(f"❌ **আপলোড ফেইল হয়েছে!**\nকারণ: `{e}`\n\n⚠️ **দয়া করে চেক করুন বটকে ডাটাবেস চ্যানেলে Admin করা হয়েছে কিনা।**")
+        error_text = f"❌ **আপলোড ফেইল হয়েছে!**\nকারণ: `{e}`\n\n⚠️ **দয়া করে চেক করুন বটকে তোমার ডাটাবেস চ্যানেল ({DB_CHANNEL_ID}) এ Admin করা হয়েছে কিনা।**"
+        await status_msg.edit_text(error_text)
     finally:
         convo["pending_uploads"] = max(0, convo.get("pending_uploads", 0) - 1)
 
-@bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare", "setdel", "setapi", "cancel", "repost", "setup", "myconfig", "delsetup"]))
+@bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "cancel"]))
 async def text_handler(client, message):
     uid = message.from_user.id
     if uid not in user_conversations: return
@@ -869,49 +949,8 @@ async def text_handler(client, message):
     convo = user_conversations[uid]
     state = convo.get("state")
     text = message.text.strip() if message.text else ""
-    
-    if state == "manual_title":
-        convo["details"]["title"] = text
-        convo["state"] = "manual_plot"
-        await message.reply_text("📝 এবার মুভির **গল্প/Plot** লিখুন:")
-        
-    elif state == "manual_plot":
-        convo["details"]["overview"] = text
-        convo["state"] = "manual_poster"
-        await message.reply_text("🖼️ এবার একটি **পোস্টার (Photo)** সেন্ড করুন:")
-        
-    elif state == "manual_poster":
-        if not message.photo: return await message.reply_text("⚠️ দয়া করে ছবি পাঠান।")
-            
-        msg = await message.reply_text("⏳ Processing Poster...")
-        try:
-            photo_path = await message.download()
-            img_url = upload_to_catbox(photo_path) 
-            os.remove(photo_path)
-            
-            if img_url:
-                convo["details"]["manual_poster_url"] = img_url
-                convo["state"] = "ask_screenshots"
-                await msg.edit_text("✅ Poster Uploaded!\n\n📸 **Add Custom Screenshots?**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📸 Add", callback_data=f"ss_yes_{uid}"), InlineKeyboardButton("⏭️ Skip", callback_data=f"ss_no_{uid}")]]))
-            else: await msg.edit_text("❌ Upload Failed.")
-        except: await msg.edit_text("❌ Error uploading.")
 
-    elif state == "wait_screenshots":
-        if not message.photo: return await message.reply_text("⚠️ Please send PHOTO.")
-            
-        msg = await message.reply_text("⏳ Uploading SS...")
-        try:
-            photo_path = await message.download()
-            ss_url = upload_to_catbox(photo_path)
-            os.remove(photo_path)
-            
-            if ss_url:
-                if "manual_screenshots" not in convo["details"]: convo["details"]["manual_screenshots"] =[]
-                convo["details"]["manual_screenshots"].append(ss_url)
-                await msg.edit_text(f"✅ Screenshot Added!\nSend another or click DONE.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ DONE", callback_data=f"ss_done_{uid}")]]))
-        except: pass
-
-    elif state == "wait_lang":
+    if state == "wait_lang":
         convo["details"]["custom_language"] = text
         convo["state"] = "wait_quality"
         await message.reply_text("💿 Enter **Quality**:")
@@ -929,98 +968,57 @@ async def text_handler(client, message):
     elif state == "wait_link_url":
         if message.video or message.document:
             asyncio.create_task(process_file_upload(client, message, uid, convo["temp_name"]))
-            if convo.get("post_id"):
-                 convo["state"] = "edit_mode"
-                 await message.reply_text(f"✅ **{convo['temp_name']}** ব্যাকগ্রাউন্ডে আপলোড শুরু হয়েছে!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
-            else:
-                convo["state"] = "ask_links"
-                await message.reply_text(f"✅ **{convo['temp_name']}** ব্যাকগ্রাউন্ডে আপলোড শুরু হয়েছে!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
+            convo["state"] = "ask_links"
+            await message.reply_text("✅ আপলোড সারিতে যোগ হয়েছে!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
 
         elif text.startswith("http"):
-            convo["links"].append({"label": convo["temp_name"], "url": text, "is_grouped": False})
-            if convo.get("post_id"):
-                 convo["state"] = "edit_mode"
-                 await message.reply_text(f"✅ Saved! Link: `{text}`", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
-            else:
-                convo["state"] = "ask_links"
-                await message.reply_text(f"✅ Saved! Total: {len(convo['links'])}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
-        else: await message.reply_text("⚠️ Invalid Input. URL or File required.")
+            convo["links"].append({"label": convo["temp_name"], "url": text, "is_grouped": False, "gofile_url": None, "fileditch_url": None, "tmpfiles_url": None, "pixel_url": None, "dood_url": None, "stape_url": None, "filemoon_url": None, "mixdrop_url": None})
+            convo["state"] = "ask_links"
+            await message.reply_text(f"✅ Saved!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
+        else:
+            await message.reply_text("⚠️ Invalid Input. URL or File required.")
 
     elif state == "wait_batch_files":
         if text.lower() == "/done":
-            if convo.get("post_id"):
-                 convo["state"] = "edit_mode"
-                 await message.reply_text(f"✅ **Batch Files Accepted!**\nঅপেক্ষা করুন, আপলোড শেষ হলে Finish এ ক্লিক করবেন।", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
-            else:
-                convo["state"] = "ask_links"
-                await message.reply_text(f"✅ **Batch Files Accepted!**\nঅপেক্ষা করুন, আপলোড শেষ হলে Finish এ ক্লিক করবেন।", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
+            convo["state"] = "ask_links"
+            await message.reply_text("✅ **Batch Accepted!**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
         elif message.video or message.document:
-            file_name = getattr(message.video, "file_name", None) or getattr(message.document, "file_name", None)
-            if not file_name: file_name = f"Episode {len(convo.get('links',[])) + convo.get('pending_uploads', 0) + 1}"
+            file_name = getattr(message.video, "file_name", None) or getattr(message.document, "file_name", None) or f"Episode {len(convo.get('links',[]))+1}"
             asyncio.create_task(process_file_upload(client, message, uid, file_name))
-        else: await message.reply_text("⚠️ দয়া করে ভিডিও/ফাইল দিন অথবা শেষ হলে /done লিখুন।")
 
     elif state == "wait_badge_text":
         convo["details"]["badge_text"] = text
         await message.reply_text("🛡️ **Safety Check:**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Safe", callback_data=f"safe_yes_{uid}"), InlineKeyboardButton("🔞 18+", callback_data=f"safe_no_{uid}")]]))
 
-@bot.on_callback_query(filters.regex("^ss_"))
-async def ss_cb(client, cb):
-    try: action, uid = cb.data.rsplit("_", 1); uid = int(uid)
-    except: return
-    if action == "ss_yes":
-        user_conversations[uid]["state"] = "wait_screenshots"
-        user_conversations[uid]["details"]["manual_screenshots"] =[]
-        await cb.message.edit_text("📸 **Send Screenshots now.**")
-    else:
-        user_conversations[uid]["state"] = "wait_lang"
-        await cb.message.edit_text("🗣️ Enter **Language** (e.g. Hindi):")
-
 @bot.on_callback_query(filters.regex("^lnk_"))
 async def link_cb(client, cb):
-    try: action, uid = cb.data.rsplit("_", 1); uid = int(uid)
-    except: return
-    if action == "lnk_yes":
+    uid = int(cb.data.rsplit("_", 1)[1])
+    if cb.data.startswith("lnk_yes"):
         user_conversations[uid]["state"] = "wait_link_name"
-        btns = [[InlineKeyboardButton("🎬 1080p", callback_data=f"setlname_1080p_{uid}"), InlineKeyboardButton("🎬 720p", callback_data=f"setlname_720p_{uid}"), InlineKeyboardButton("🎬 480p", callback_data=f"setlname_480p_{uid}")],[InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}"), InlineKeyboardButton("📁 Default", callback_data=f"setlname_telegram_{uid}")],[InlineKeyboardButton("📦 Batch Upload (Series)", callback_data=f"setlname_batch_{uid}")]]
-        await cb.message.edit_text("👇 বাটনের ধরন বা কোয়ালিটি সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
+        btns = [[InlineKeyboardButton("🎬 1080p", callback_data=f"setlname_1080p_{uid}"), InlineKeyboardButton("🎬 720p", callback_data=f"setlname_720p_{uid}")],[InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}"), InlineKeyboardButton("📁 Default", callback_data=f"setlname_telegram_{uid}")],[InlineKeyboardButton("📦 Batch Upload", callback_data=f"setlname_batch_{uid}")]]
+        await cb.message.edit_text("👇 বাটনের ধরন সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
     else:
-        if user_conversations.get(uid, {}).get("pending_uploads", 0) > 0: return await cb.answer("⏳ ফাইল আপলোড শেষ হওয়া পর্যন্ত অপেক্ষা করুন...", show_alert=True)
+        if user_conversations.get(uid, {}).get("pending_uploads", 0) > 0:
+            return await cb.answer("⏳ ফাইল আপলোড শেষ হওয়া পর্যন্ত অপেক্ষা করুন...", show_alert=True)
         user_conversations[uid]["state"] = "wait_badge_text"
-        await cb.message.edit_text("🖼️ **Badge Text?**\n\nলিখে পাঠান অথবা Skip করুন:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Skip", callback_data=f"skip_badge_{uid}")]]))
-
-@bot.on_callback_query(filters.regex("^add_lnk_edit_"))
-async def add_lnk_edit(client, cb):
-    uid = int(cb.data.split("_")[-1])
-    if uid in user_conversations:
-        user_conversations[uid]["state"] = "wait_link_name"
-        btns = [[InlineKeyboardButton("🎬 1080p", callback_data=f"setlname_1080p_{uid}"), InlineKeyboardButton("🎬 720p", callback_data=f"setlname_720p_{uid}"), InlineKeyboardButton("🎬 480p", callback_data=f"setlname_480p_{uid}")],[InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}"), InlineKeyboardButton("📁 Default", callback_data=f"setlname_telegram_{uid}")],[InlineKeyboardButton("📦 Batch Upload (Series)", callback_data=f"setlname_batch_{uid}")]]
-        await cb.message.edit_text("👇 বাটনের ধরন বা কোয়ালিটি সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
+        await cb.message.edit_text("🖼️ **Badge Text?**\nলিখে পাঠান অথবা Skip করুন:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Skip", callback_data=f"skip_badge_{uid}")]]))
 
 @bot.on_callback_query(filters.regex("^setlname_"))
 async def set_lname_cb(client, cb):
-    try: _, action, uid = cb.data.split("_"); uid = int(uid)
-    except: return
+    _, action, uid = cb.data.split("_")
+    uid = int(uid)
     if action in["1080p", "720p", "480p"]:
         user_conversations[uid]["temp_name"] = action; user_conversations[uid]["state"] = "wait_link_url"
-        await cb.message.edit_text(f"✅ কোয়ালিটি সেট: **{action}**\n\n🔗 এবার **URL** বা **ভিডিও ফাইল** দিন:")
+        await cb.message.edit_text(f"✅ Set: **{action}**\n🔗 **URL** বা **ফাইল** দিন:")
     elif action == "custom":
         user_conversations[uid]["state"] = "wait_link_name_custom"
-        await cb.message.edit_text("📝 কাস্টম বাটনের নাম লিখুন (যেমন: 4K, 1080p 60fps বা Ep-01):")
+        await cb.message.edit_text("📝 বাটনের নাম লিখুন:")
     elif action == "batch":
         user_conversations[uid]["state"] = "wait_batch_files"
-        await cb.message.edit_text("📦 **Batch Mode:**\n\nআপনার সিরিজের সব ফাইল বা এপিসোড একসাথে ফরোয়ার্ড করুন।\nফাইলের নামগুলোই এপিসোড নাম হিসেবে সেট হবে।\nসব দেওয়া হলে টাইপ করুন: `/done`")
+        await cb.message.edit_text("📦 **Batch Mode:** সব ফাইল ফরোয়ার্ড করুন। শেষে `/done` লিখুন।")
     else:
         user_conversations[uid]["temp_name"] = "Telegram Files"; user_conversations[uid]["state"] = "wait_link_url"
-        await cb.message.edit_text("✅ বাটন সেট। 🔗 এবার **URL** বা **ভিডিও ফাইল** দিন:")
-
-@bot.on_callback_query(filters.regex("^gen_edit_"))
-async def gen_edit_finish(client, cb):
-    uid = int(cb.data.split("_")[-1])
-    if uid in user_conversations:
-        if user_conversations[uid].get("pending_uploads", 0) > 0: return await cb.answer("⏳ ফাইল আপলোড শেষ হওয়া পর্যন্ত অপেক্ষা করুন...", show_alert=True)
-        await cb.answer("⏳ Generating...", show_alert=False)
-        await generate_final_post(client, uid, cb.message)
+        await cb.message.edit_text("✅ বাটন সেট। 🔗 **URL** বা **ফাইল** দিন:")
 
 @bot.on_callback_query(filters.regex("^skip_badge_"))
 async def skip_badge_cb(client, cb):
@@ -1031,16 +1029,15 @@ async def skip_badge_cb(client, cb):
 
 @bot.on_callback_query(filters.regex("^safe_"))
 async def safety_cb(client, cb):
-    try: action, uid = cb.data.rsplit("_", 1); uid = int(uid)
-    except: return
-    user_conversations[uid]["details"]["force_adult"] = True if action == "safe_no" else False
+    action, uid = cb.data.rsplit("_", 1)
+    user_conversations[int(uid)]["details"]["force_adult"] = (action == "safe_no")
     btns = [[InlineKeyboardButton("🔴 Netflix (Dark)", callback_data=f"theme_netflix_{uid}")],[InlineKeyboardButton("🔵 Prime (Blue)", callback_data=f"theme_prime_{uid}")],[InlineKeyboardButton("⚪ Anime (Light)", callback_data=f"theme_light_{uid}")]]
-    await cb.message.edit_text("🎨 **ওয়েবসাইটের থিম (Theme) সিলেক্ট করুন:**", reply_markup=InlineKeyboardMarkup(btns))
+    await cb.message.edit_text("🎨 **ওয়েবসাইটের থিম (Theme):**", reply_markup=InlineKeyboardMarkup(btns))
 
 @bot.on_callback_query(filters.regex("^theme_"))
 async def theme_cb(client, cb):
-    try: _, theme_name, uid = cb.data.split("_"); uid = int(uid)
-    except: return
+    _, theme_name, uid = cb.data.split("_")
+    uid = int(uid)
     user_conversations[uid]["details"]["theme"] = theme_name
     await generate_final_post(client, uid, cb.message)
 
@@ -1063,19 +1060,14 @@ async def generate_final_post(client, uid, message):
         convo["final"] = {"html": html}
         
         btns = [[InlineKeyboardButton("📄 Get Blogger Code", callback_data=f"get_code_{uid}")]]
-        if img_io:
-            await client.send_photo(message.chat.id, img_io, caption=caption, reply_markup=InlineKeyboardMarkup(btns))
-            await status_msg.delete()
-        else:
-            await client.send_message(message.chat.id, caption, reply_markup=InlineKeyboardMarkup(btns))
-            await status_msg.delete()
-    except Exception as e:
-        await status_msg.edit_text(f"❌ **Error:** `{e}`")
+        if img_io: await client.send_photo(message.chat.id, img_io, caption=caption, reply_markup=InlineKeyboardMarkup(btns))
+        else: await client.send_message(message.chat.id, caption, reply_markup=InlineKeyboardMarkup(btns))
+        await status_msg.delete()
+    except Exception as e: await status_msg.edit_text(f"❌ **Error:** `{e}`")
 
 @bot.on_callback_query(filters.regex("^get_code_"))
 async def get_code(client, cb):
-    try: _, _, uid = cb.data.rsplit("_", 2); uid = int(uid)
-    except: return
+    uid = int(cb.data.rsplit("_", 1)[1])
     data = user_conversations.get(uid)
     if not data or "final" not in data: return await cb.answer("Expired.", show_alert=True)
     await cb.answer("⏳ Generating Code...", show_alert=False)
@@ -1087,34 +1079,25 @@ async def get_code(client, cb):
         file.name = "post.html"
         await client.send_document(cb.message.chat.id, file, caption="⚠️ Link failed. Download File.")
 
+# --- PLUGIN LOADER ---
 async def load_plugins():
     plugins_path = os.path.join(os.path.dirname(__file__), "plugins")
-    if not os.path.exists(plugins_path): os.makedirs(plugins_path); return
-    print("🔌 Loading plugins...")
+    if not os.path.exists(plugins_path): return
     for loader, module_name, is_pkg in pkgutil.iter_modules([plugins_path]):
         try:
             module = importlib.import_module(f"plugins.{module_name}")
             if hasattr(module, "register"): await module.register(bot)
-            print(f"✅ Plugin Loaded: {module_name}")
-        except Exception as e: print(f"❌ Failed to load plugin {module_name}: {e}")
+        except Exception as e: logger.error(f"Failed to load {module_name}: {e}")
 
+# --- MAIN ---
 async def main():
     await bot.start()
     await load_plugins()
     await start_worker() 
-    print("✅ Bot and Worker are Online with Plugin Support!")
+    print("✅ Bot is Online with Tele-Only Uploads & Custom UI!")
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    ping_thread = Thread(target=keep_alive_pinger)
-    ping_thread.daemon = True
-    ping_thread.start()
-    
-    print("🚀 Ultimate SPA Bot is Starting with Plugin System...")
-
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    Thread(target=run_flask, daemon=True).start()
+    Thread(target=keep_alive_pinger, daemon=True).start()
+    asyncio.get_event_loop().run_until_complete(main())
