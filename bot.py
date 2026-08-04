@@ -549,7 +549,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <a href="https://t.me/getnewlink11" target="_blank" style="background: #0088cc; color: white; padding: 12px; border-radius: 8px; text-decoration: none; text-align: center; font-size: 14px; font-weight: bold;">✈️ Telegram</a>
                     <a href="whatsapp://send?text=Visit%20Our%20Website" target="_blank" style="background: #25D366; color: white; padding: 12px; border-radius: 8px; text-decoration: none; text-align: center; font-size: 14px; font-weight: bold;">💬 WhatsApp</a>
-                    <a href="https://www.facebook.com/sharer/sharer.php?u=https://t.me/koreandrama006" target="_blank" style="background: #1877F2; color: white; padding: 12px; border-radius: 8px; text-decoration: none; text-align: center; font-size: 14px; font-weight: bold;">📘 Facebook</a>
+                    <a href="https://www.facebook.com/sharer/sharer.php?u=https://t.me/getnewlink11" target="_blank" style="background: #1877F2; color: white; padding: 12px; border-radius: 8px; text-decoration: none; text-align: center; font-size: 14px; font-weight: bold;">📘 Facebook</a>
                     <button onclick="navigator.clipboard.writeText(window.location.href); alert('লিংক কপি হয়েছে!');" style="background: #555; border: none; color: white; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; font-family: 'Poppins', sans-serif;">🔗 Copy Link</button>
                 </div>
             </div>
