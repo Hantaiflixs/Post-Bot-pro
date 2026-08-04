@@ -956,7 +956,7 @@ async def on_select(client, cb):
         await cb.message.edit_text(f"✅ Selected: **{details.get('title') or details.get('name')}**\n\n🗣️ Enter **Language**:")
     except Exception as e: logger.error(f"Select error: {e}")
 
-# 🔥 BACKGROUND ASYNC UPLOAD
+# 🔥 BACKGROUND ASYNC UPLOAD (WITH PROPER FLOODWAIT PROTECTION & AUTO DELETE)
 async def process_file_upload(client, message, uid, temp_name):
     convo = user_conversations.get(uid)
     if not convo: return
@@ -980,6 +980,12 @@ async def process_file_upload(client, message, uid, temp_name):
             })
             await status_msg.edit_text(f"✅ **আপলোড সম্পন্ন:** {temp_name}")
             
+            # 🔥 ফাইলটি আপলোড হওয়ার পর বটের ইনবক্স থেকে মুছে ফেলার কোড
+            try:
+                await message.delete()
+            except Exception as e:
+                pass
+                
     except Exception as e:
         logger.error(f"Upload Error: {e}")
         await status_msg.edit_text(f"❌ **আপলোড ফেইল হয়েছে!**\nকারণ: `{e}`\n\n⚠️ **দয়া করে চেক করুন বটকে ডাটাবেস চ্যানেলে Admin করা হয়েছে কিনা।**")
