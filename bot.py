@@ -184,7 +184,7 @@ async def fetch_url(url, method="GET", data=None, headers=None, json_data=None):
     return None
 
 # ====================================================================
-# 🔥 MULTI-SERVER DUMMY FUNCTIONS (REQUIRED TO PREVENT PLUGIN CRASHES)
+# 🔥 MULTI-SERVER DUMMY FUNCTIONS 
 # ====================================================================
 async def upload_to_gofile(file_path): return None
 async def upload_to_fileditch(file_path): return None
@@ -321,15 +321,16 @@ def apply_badge_to_poster(poster_bytes, text):
     except: return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 ADVANCED HTML GENERATOR (NEW UI WITH AD-BLOCK & RGB BUTTONS)
+# 🔥 ADVANCED HTML GENERATOR (NEW UI WITH BATCH SUPPORT)
 # ============================================================================
 def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, admin_share_percent=20):
     title = data.get("title") or data.get("name")
     overview = data.get("overview", "No plot available.")
     poster = data.get('manual_poster_url') or f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}"
-    BTN_TELEGRAM = "https://i.ibb.co/kVfJvhzS/photo-2025-12-23-12-38-56-7587031987190235140.jpg"
 
     is_adult = data.get('adult', False) or data.get('force_adult', False)
+    is_batch = data.get('is_batch', False)
+    post_id = data.get('post_id', '')
 
     theme = data.get("theme", "netflix")
     if theme == "netflix": root_css = "--bg-color: #0f0f13; --box-bg: #1a1a24; --text-main: #ffffff; --text-muted: #d1d1d1; --primary: #E50914; --accent: #00d2ff; --border: #2a2a35; --btn-grad: linear-gradient(90deg, #E50914 0%, #ff5252 100%); --btn-shadow: 0 5px 15px rgba(229, 9, 20, 0.4);"
@@ -349,10 +350,28 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         cast_list = data.get('credits', {}).get('cast',[])
         cast_names = ", ".join([c['name'] for c in cast_list[:4]]) if cast_list else "Unknown"
 
-    # 🔥 GENERATE SERVER LIST (RGB BUTTONS)
+    # 🔥 GENERATE SERVER LIST (BATCH OR SINGLE)
     server_list_html = ""
     if not links:
         server_list_html = '<div style="color: #ff5252; text-align: center; padding: 15px; background: rgba(255,0,0,0.1); border-radius: 8px;">⚠️ দুঃখিত! ডাটাবেসে সেভ না হওয়ায় লিংক তৈরি হয়নি।</div>'
+    elif is_batch and post_id:
+        tg_url = links[0].get("tg_url", "")
+        base_url = tg_url.split("?start=")[0] if "?start=" in tg_url else "https://t.me/koreandrama006"
+        batch_link = f"{base_url}?start=batch-{post_id}"
+        batch_b64 = base64.b64encode(batch_link.encode('utf-8')).decode('utf-8')
+        file_count = len(links)
+        
+        server_list_html = f'''
+        <div class="quality-title" style="border-left-color:#00e676;">📁 EPISODES / BATCH FILES</div>
+        <div class="server-grid" style="display: flex; justify-content: center; width: 100%;">
+            <div class="rgb-btn-wrapper" style="width: 100%; max-width: 500px;">
+                <button class="rgb-btn" onclick="goToLink('{batch_b64}')">
+                    <div style="font-size:15px; font-weight:bold; color:var(--text-main); margin-bottom:5px;">🎬 📦 All Episodes Batch ({file_count} Files)</div>
+                    <div style="font-size:12px; color:#00e676; font-weight:bold;">⬇️ Get File</div>
+                </button>
+            </div>
+        </div>
+        '''
     else:
         grouped_links = {}
         for link in links:
@@ -431,24 +450,6 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     }}
     </script>
 
-    <script>
-    async function detectAdBlock() {{
-      let adBlockEnabled = false;
-      const googleAdUrl = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
-      try {{ await fetch(new Request(googleAdUrl)).catch(_ => adBlockEnabled = true); }} catch (e) {{ adBlockEnabled = true; }}
-      if (adBlockEnabled) {{
-        document.body.innerHTML = `
-        <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#0f0f13;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;padding:20px;">
-            <h1 style="color:#ff5252;font-size:50px;">🚫</h1>
-            <h2>Ad-Blocker Detected!</h2>
-            <p style="color:#aaa;max-width:400px;">আমাদের সার্ভার খরচ চালানোর জন্য বিজ্ঞাপনের প্রয়োজন। দয়া করে আপনার <b>Ad-Blocker</b> বন্ধ করে পেজটি রিফ্রেশ দিন।</p>
-            <button onclick="window.location.reload()" style="background:#E50914;color:#fff;border:none;padding:12px 25px;border-radius:5px;cursor:pointer;font-weight:bold;margin-top:20px;font-size:16px;">আমি বন্ধ করেছি, রিফ্রেশ দিন!</button>
-        </div>`;
-      }}
-    }}
-    window.onload = function() {{ detectAdBlock(); }};
-    </script>
-
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {{ {root_css} }}
@@ -480,7 +481,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         
         #glow-bar {{ position: absolute; bottom: 0; left: 0; height: 100%; width: 0%; background: rgba(255, 255, 255, 0.2); box-shadow: inset 0 0 20px rgba(255,255,255,0.5); transition: width 5s linear; z-index: 1; }}
 
-        .quality-title {{ background: rgba(0,0,0,0.2); border-left: 4px solid var(--primary); border-radius: 4px; padding: 8px 15px; font-size: 13px; font-weight: 600; color: var(--text-main); margin-top: 25px; text-transform: uppercase; border: 1px solid var(--border); background: linear-gradient(90deg, #E50914, transparent) !important; color: #fff !important; border: none !important; }}
+        .quality-title {{ background: rgba(0,0,0,0.2); border-left: 4px solid var(--primary); border-radius: 4px; padding: 10px 15px; font-size: 14px; font-weight: bold; color: var(--text-main); margin-top: 25px; text-transform: uppercase; border: 1px solid var(--border); }}
         .server-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 15px; }} 
         
         .rgb-btn-wrapper {{ position: relative; border-radius: 8px; padding: 2px; background: linear-gradient(45deg, #ff0000, #ff7300, #fffb00, #48ff00, #00ffd5, #002bff, #7a00ff, #ff00c8, #ff0000); background-size: 400%; animation: glowing 20s linear infinite; }}
@@ -541,25 +542,20 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
             <div style="text-align:center; color:#00e676; font-size:15px; font-weight:bold; margin-bottom:25px; border:1px solid rgba(0,230,118,0.3); padding:15px; border-radius:8px; background:rgba(0,230,118,0.05);">✅ ALL LINKS UNLOCKED SUCCESSFULLY!</div>
             
             {server_list_html}
-            
-            <div style="text-align: center; margin-top: 30px;">
-                <a href="https://t.me/koreandrama006" target="_blank">
-                    <img src="{BTN_TELEGRAM}" style="width: 100%; max-width: 300px; border-radius: 20px; border: 1px solid var(--border);">
-                </a>
+
+            <!-- Share Section -->
+            <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                <div style="font-size: 14px; color: #fff; margin-bottom: 15px; font-weight: 600;">🔗 মুভিটি বন্ধুদের সাথে শেয়ার করুন:</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <a href="https://t.me/koreandrama006" target="_blank" style="background: #0088cc; color: white; padding: 12px; border-radius: 8px; text-decoration: none; text-align: center; font-size: 14px; font-weight: bold;">✈️ Telegram</a>
+                    <a href="whatsapp://send?text=Visit%20Our%20Website" target="_blank" style="background: #25D366; color: white; padding: 12px; border-radius: 8px; text-decoration: none; text-align: center; font-size: 14px; font-weight: bold;">💬 WhatsApp</a>
+                    <a href="https://www.facebook.com/sharer/sharer.php?u=https://t.me/koreandrama006" target="_blank" style="background: #1877F2; color: white; padding: 12px; border-radius: 8px; text-decoration: none; text-align: center; font-size: 14px; font-weight: bold;">📘 Facebook</a>
+                    <button onclick="navigator.clipboard.writeText(window.location.href); alert('লিংক কপি হয়েছে!');" style="background: #555; border: none; color: white; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; font-family: 'Poppins', sans-serif;">🔗 Copy Link</button>
+                </div>
             </div>
+            
         </div>
     </div>
-
-    <!-- OneSignal SDK for Push Notifications -->
-    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-    <script>
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {{
-        await OneSignal.init({{
-          appId: "d8b008a1-623d-495d-b10d-8def7460f2ea",
-        }});
-      }});
-    </script>
 
     <script>
     const AD_LINKS = {json.dumps(weighted_ad_list)};
@@ -692,7 +688,43 @@ async def start_cmd(client, message):
     
     if len(message.command) > 1:
         payload = message.command[1]
-        if payload.startswith("get-"):
+        
+        # 🔥 নতুন সিস্টেম: ব্যাচ লিংকে ক্লিক করলে সব ফাইল একসাথে সেন্ড হবে
+        if payload.startswith("batch-"):
+            if await is_banned(uid): return await message.reply_text("🚫 **Access Denied:** You are banned.")
+            try:
+                pid = payload.split("-")[1]
+                temp_msg = await message.reply_text("🔍 **Searching Batch Files...**")
+                
+                post = await posts_col.find_one({"_id": pid})
+                if not post or not post.get("links"):
+                    return await temp_msg.edit_text("❌ **Batch Not Found!**")
+                    
+                await temp_msg.edit_text("⏳ **Sending Files... Please wait**")
+                
+                msg_ids = []
+                for link in post["links"]:
+                    if link.get("tg_url") and "get-" in link["tg_url"]:
+                        try:
+                            msg_id = int(link["tg_url"].split("get-")[1])
+                            file_msg = await client.copy_message(chat_id=uid, from_chat_id=DB_CHANNEL_ID, message_id=msg_id, protect_content=False)
+                            msg_ids.append(file_msg.id)
+                            await asyncio.sleep(0.5) # FloodWait এড়াতে
+                        except: pass
+                            
+                await temp_msg.delete()
+
+                timer = await get_auto_delete_timer()
+                if timer > 0 and msg_ids:
+                    time_str = f"{timer//60} মিনিট" if timer >= 60 else f"{timer} সেকেন্ড"
+                    warning_msg = await message.reply_text(f"⚠️ **সতর্কবার্তা:** কপিরাইট এড়াতে এই ফাইলগুলো **{time_str}** পর ডিলিট হয়ে যাবে!\n\n📥 দয়া করে এখনই ফাইলগুলো Save করে রাখুন।", quote=True)
+                    msg_ids.append(warning_msg.id)
+                    asyncio.create_task(auto_delete_task(client, uid, msg_ids, timer))
+                return
+            except Exception as e:
+                return await message.reply_text("❌ **Error fetching batch files!**")
+                
+        elif payload.startswith("get-"):
             if await is_banned(uid): return await message.reply_text("🚫 **Access Denied:** You are banned.")
             try:
                 msg_id = int(payload.split("-")[1])
@@ -924,7 +956,7 @@ async def on_select(client, cb):
         await cb.message.edit_text(f"✅ Selected: **{details.get('title') or details.get('name')}**\n\n🗣️ Enter **Language**:")
     except Exception as e: logger.error(f"Select error: {e}")
 
-# 🔥 BACKGROUND ASYNC UPLOAD (WITH PROPER FLOODWAIT PROTECTION)
+# 🔥 BACKGROUND ASYNC UPLOAD
 async def process_file_upload(client, message, uid, temp_name):
     convo = user_conversations.get(uid)
     if not convo: return
@@ -954,7 +986,7 @@ async def process_file_upload(client, message, uid, temp_name):
     finally:
         convo["pending_uploads"] = max(0, convo.get("pending_uploads", 0) - 1)
 
-# 🔥 MAIN TEXT HANDLER (ALL MANUAL STATES RESTORED)
+# 🔥 MAIN TEXT HANDLER
 @bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare", "setdel", "setapi", "cancel", "repost", "setup", "myconfig", "delsetup"]))
 async def text_handler(client, message):
     uid = message.from_user.id
@@ -1076,7 +1108,7 @@ async def link_cb(client, cb):
     except: return
     if action == "lnk_yes":
         user_conversations[uid]["state"] = "wait_link_name"
-        btns = [[InlineKeyboardButton("🎬 1080p", callback_data=f"setlname_1080p_{uid}"), InlineKeyboardButton("🎬 720p", callback_data=f"setlname_720p_{uid}"), InlineKeyboardButton("🎬 480p", callback_data=f"setlname_480p_{uid}")],[InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}"), InlineKeyboardButton("📁 Default", callback_data=f"setlname_telegram_{uid}")],[InlineKeyboardButton("📦 Batch Upload (Series)", callback_data=f"setlname_batch_{uid}")]]
+        btns = [[InlineKeyboardButton("🎬 1080p", callback_data=f"setlname_1080p_{uid}"), InlineKeyboardButton("🎬 720p", callback_data=f"setlname_720p_{uid}"), InlineKeyboardButton("🎬 480p", callback_data=f"setlname_480p_{uid}")],[InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}"), InlineKeyboardButton("📁 Default", callback_data=f"setlname_telegram_{uid}")],[InlineKeyboardButton("📦 Batch Upload (All Episodes)", callback_data=f"setlname_batch_{uid}")]]
         await cb.message.edit_text("👇 বাটনের ধরন বা কোয়ালিটি সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
     else:
         if user_conversations.get(uid, {}).get("pending_uploads", 0) > 0: return await cb.answer("⏳ ফাইল আপলোড শেষ হওয়া পর্যন্ত অপেক্ষা করুন...", show_alert=True)
@@ -1088,7 +1120,7 @@ async def add_lnk_edit(client, cb):
     uid = int(cb.data.split("_")[-1])
     if uid in user_conversations:
         user_conversations[uid]["state"] = "wait_link_name"
-        btns = [[InlineKeyboardButton("🎬 1080p", callback_data=f"setlname_1080p_{uid}"), InlineKeyboardButton("🎬 720p", callback_data=f"setlname_720p_{uid}"), InlineKeyboardButton("🎬 480p", callback_data=f"setlname_480p_{uid}")],[InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}"), InlineKeyboardButton("📁 Default", callback_data=f"setlname_telegram_{uid}")],[InlineKeyboardButton("📦 Batch Upload (Series)", callback_data=f"setlname_batch_{uid}")]]
+        btns = [[InlineKeyboardButton("🎬 1080p", callback_data=f"setlname_1080p_{uid}"), InlineKeyboardButton("🎬 720p", callback_data=f"setlname_720p_{uid}"), InlineKeyboardButton("🎬 480p", callback_data=f"setlname_480p_{uid}")],[InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}"), InlineKeyboardButton("📁 Default", callback_data=f"setlname_telegram_{uid}")],[InlineKeyboardButton("📦 Batch Upload (All Episodes)", callback_data=f"setlname_batch_{uid}")]]
         await cb.message.edit_text("👇 বাটনের ধরন বা কোয়ালিটি সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
 
 @bot.on_callback_query(filters.regex("^setlname_"))
@@ -1103,6 +1135,8 @@ async def set_lname_cb(client, cb):
         await cb.message.edit_text("📝 কাস্টম বাটনের নাম লিখুন (যেমন: 4K, 1080p 60fps বা Ep-01):")
     elif action == "batch":
         user_conversations[uid]["state"] = "wait_batch_files"
+        # 🔥 নতুন সিস্টেম: ব্যাচ মোড অন করা হলো
+        user_conversations[uid]["details"]["is_batch"] = True 
         await cb.message.edit_text("📦 **Batch Mode:**\n\nআপনার সিরিজের সব ফাইল বা এপিসোড একসাথে ফরোয়ার্ড করুন।\nফাইলের নামগুলোই এপিসোড নাম হিসেবে সেট হবে।\nসব দেওয়া হলে টাইপ করুন: `/done`")
     else:
         user_conversations[uid]["temp_name"] = "Telegram Files"; user_conversations[uid]["state"] = "wait_link_url"
@@ -1145,6 +1179,8 @@ async def generate_final_post(client, uid, message):
 
     try:
         pid = await save_post_to_db(convo["details"], convo["links"])
+        convo["details"]["post_id"] = pid  # 🔥 Injecting PID for batch links
+        
         loop = asyncio.get_running_loop()
         img_io, poster_bytes = await loop.run_in_executor(None, generate_image, convo["details"])
 
