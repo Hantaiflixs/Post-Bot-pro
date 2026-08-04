@@ -690,6 +690,7 @@ async def start_cmd(client, message):
         payload = message.command[1]
         
         # 🔥 নতুন সিস্টেম: ব্যাচ লিংকে ক্লিক করলে সব ফাইল একসাথে সেন্ড হবে
+                # 🔥 নতুন সিস্টেম: ব্যাচ লিংকে ক্লিক করলে সব ফাইল একসাথে সেন্ড হবে
         if payload.startswith("batch-"):
             if await is_banned(uid): return await message.reply_text("🚫 **Access Denied:** You are banned.")
             try:
@@ -702,12 +703,22 @@ async def start_cmd(client, message):
                     
                 await temp_msg.edit_text("⏳ **Sending Files... Please wait**")
                 
+                # 🔥 ব্যাচ ফাইলের জন্য অটো-ক্যাপশন জেনারেট করা হলো
+                final_caption = generate_file_caption(post["details"]) if "details" in post else f"🎥 **Here are your files!**\n\n🤖 Powered by {client.me.mention}"
+                
                 msg_ids = []
                 for link in post["links"]:
                     if link.get("tg_url") and "get-" in link["tg_url"]:
                         try:
                             msg_id = int(link["tg_url"].split("get-")[1])
-                            file_msg = await client.copy_message(chat_id=uid, from_chat_id=DB_CHANNEL_ID, message_id=msg_id, protect_content=False)
+                            # 🔥 এখানে caption=final_caption যুক্ত করা হয়েছে
+                            file_msg = await client.copy_message(
+                                chat_id=uid, 
+                                from_chat_id=DB_CHANNEL_ID, 
+                                message_id=msg_id, 
+                                caption=final_caption, 
+                                protect_content=False
+                            )
                             msg_ids.append(file_msg.id)
                             await asyncio.sleep(0.5) # FloodWait এড়াতে
                         except: pass
